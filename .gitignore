@@ -1,0 +1,9 @@
+sim_build/
+.Xil/
+*.vvp
+*.vcd
+vivado_build/
+vivado_reports/
+*.jou
+*.log
+*.str
