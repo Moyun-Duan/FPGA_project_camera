@@ -125,8 +125,8 @@ and writes reports under:
 vivado_reports/
 ```
 
-Bitstream generation is intentionally skipped until EGO1 pin constraints are
-verified from the real board/schematic.
+Bitstream generation is intentionally skipped until the OV7670 adapter wiring is
+verified against the J5 expansion-header mapping in the XDC.
 
 ## Vivado Installation Status
 
@@ -181,8 +181,8 @@ Current post-route timing/resource summary:
 - DSPs: 0 / 90, 0.00%
 - Bonded IOB: 35 / 210, 16.67%
 
-Important: these results are before real pin constraints and before bitstream
-generation.
+Important: these results were produced before the EGO1 V2.2 pin constraints were
+filled in and before bitstream generation.
 
 ## Constraints Status
 
@@ -195,15 +195,16 @@ constraints/ego1_template.xdc
 Currently included:
 
 - timing constraints for `clk_100m`, `cam_pclk`, and generated `pix_clk`
+- EGO1 V2.2 `PACKAGE_PIN` assignments for system clock, reset, switches, VGA,
+  status LED, and the OV7670 signals mapped to J5. `cam_pclk` is placed on
+  J5-20/D15 because that pin is MRCC clock-capable.
 
 Currently not included:
 
-- real EGO1 `PACKAGE_PIN` assignments
-- final IO standards beyond commented template entries
 - input/output delays for camera/VGA external timing
 
-Reason: pin assignments must not be guessed. Fill these from the official EGO1
-schematic or master XDC after hardware/docs are available.
+Reason: the board pins are now taken from the EGO1 V2.2 manual, but the camera
+adapter cable order still has to match the J5 signal order in the XDC.
 
 ## Known Warnings / Current Technical Debt
 
@@ -233,7 +234,7 @@ When hardware arrives, proceed in this order:
    xc7a35tcsg324-1
    ```
 
-2. Fill `constraints/ego1_template.xdc` with official EGO1 pins.
+2. Confirm the OV7670 adapter wiring matches `constraints/ego1_template.xdc`.
 
 3. First test VGA output alone, preferably by temporarily replacing framebuffer
    output with a simple pattern.
@@ -251,7 +252,7 @@ When hardware arrives, proceed in this order:
 
 9. Try Sobel/sketch modes and tune the threshold in `rtl/sobel_pipeline.v`.
 
-10. Only after pin constraints are confirmed, add bitstream generation to
+10. Only after the J5 camera wiring is confirmed, add bitstream generation to
     `vivado/run_synth_impl.tcl`.
 
 ## User Preference
@@ -266,4 +267,3 @@ For the next Codex session:
   done offline.
 - If asked to prepare for hardware, fill pins only from a reliable EGO1 source,
   never by guessing.
-

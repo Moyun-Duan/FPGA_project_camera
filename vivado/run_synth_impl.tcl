@@ -33,4 +33,4 @@ report_timing_summary -file [file join $report_dir "post_route_timing_summary.rp
 
 puts "Synthesis and implementation completed."
 puts "Reports written to $report_dir"
-puts "Bitstream generation is intentionally skipped until EGO1 pin constraints are verified."
+puts "Bitstream generation is intentionally skipped until the OV7670 J5 wiring is verified."

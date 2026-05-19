@@ -2,16 +2,19 @@
 
 ## 1. Confirm Board-Level Constraints
 
-Before generating a bitstream, fill `constraints/ego1_template.xdc` from the EGO1
-schematic or official master XDC:
+Before generating a bitstream, confirm `constraints/ego1_template.xdc` against the
+actual board and camera adapter:
 
-- 100 MHz system clock pin
-- Reset key or switch pin
+- 100 MHz system clock pin from EGO1 V2.2: `P17`
+- Reset pin from EGO1 V2.2: `P15`
 - Slide switches used for `mode_sw`
 - VGA RGB, HSYNC, VSYNC pins
 - OV7670 `PCLK`, `VSYNC`, `HREF`, `D[7:0]`, `XCLK`, `SIOD`, `SIOC`, `RESET`, `PWDN`
+  wired to the J5 positions shown in the XDC comments. `PCLK` must use J5-20
+  because it is the MRCC clock-capable pin used by the current RTL.
 
-Do not guess these pins. Wrong camera power or IO pin assignments can damage hardware.
+Do not guess the camera adapter cable order. Wrong camera power or IO pin
+assignments can damage hardware.
 
 ## 2. First Bitstream Strategy
 

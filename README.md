@@ -20,14 +20,15 @@ The repository contains the parts that can be completed without physical hardwar
   buffer, VGA timing, and top-level integration.
 - Icarus Verilog testbenches for the OV7670 byte capture path and image pipeline.
 - Vivado project creation Tcl script.
-- EGO1 constraints template with explicit TODO pin placeholders.
+- EGO1 V2.2 constraints for clock, reset, switches, VGA, status LED, and a J5
+  expansion-header OV7670 wiring map.
 - Hardware bring-up checklist for the first board-debug session.
 
 ## Directory Layout
 
 ```text
 fpga_vision_system/
-  constraints/         XDC template, pins must be filled from the EGO1 schematic
+  constraints/         EGO1 V2.2 XDC and J5 camera-header mapping
   docs/                Requirement extraction and bring-up notes
   rtl/                 Synthesizable Verilog source
   scripts/             Local simulation helper script
@@ -69,9 +70,7 @@ Open Vivado 2017 Tcl console from `fpga_vision_system` and run:
 source vivado/create_project.tcl
 ```
 
-The script assumes an Artix-7 `xc7a35tcsg324-1`, which is commonly used by EGO1
-class boards. Confirm the exact part number in your lab board documentation before
-bitstream generation.
+The script assumes the EGO1 V2.2 Artix-7 `xc7a35tcsg324-1` package.
 
 ## Run Vivado Synthesis And Implementation
 
@@ -88,16 +87,25 @@ Run:
 ```
 
 This runs `synth_1` and `impl_1` through `route_design`, then writes reports under
-`vivado_reports/`. Bitstream generation is skipped until EGO1 pin constraints are
-verified.
+`vivado_reports/`. Bitstream generation is still skipped until the physical J5
+to OV7670 wiring has been verified.
 
 ## Hardware Work Still Required
 
 Physical board debugging is still required for:
 
-- Confirming all EGO1 pin constraints.
+- Confirming the OV7670 adapter wiring matches the J5 signal order in the XDC.
 - Verifying OV7670 SCCB register values with the exact camera module.
 - Checking camera `PCLK/HREF/VSYNC` polarity and byte order.
 - Replacing fabric-divided clocks with a Vivado Clocking Wizard/MMCM if the course
   requires stricter timing closure.
 - Tuning Sobel threshold for the actual camera lighting environment.
+
+## Chinese Project Handoff
+
+For current status, missing work, Vivado 2017.4 usage, simulation, board bring-up,
+and post-verification direction, see:
+
+```text
+docs/project_status_and_next_steps.md
+```
