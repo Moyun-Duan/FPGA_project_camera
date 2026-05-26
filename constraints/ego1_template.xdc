@@ -47,7 +47,7 @@ set_property PACKAGE_PIN C4 [get_ports vga_vsync]
 set_property IOSTANDARD LVCMOS33 [get_ports {vga_*}]
 
 ## OV7670 camera on J5 expansion header.
-## cam_pclk uses J5-20, an MRCC clock-capable pin. Do not move it to a regular IO
+## cam_pclk uses J5-19, an MRCC clock-capable pin. Do not move it to a regular IO
 ## unless the clocking strategy is also changed.
 set_property PACKAGE_PIN B16 [get_ports cam_pwdn]       ;# J5-1
 set_property PACKAGE_PIN B17 [get_ports cam_vsync]      ;# J5-2
@@ -64,5 +64,5 @@ set_property PACKAGE_PIN B14 [get_ports cam_xclk]       ;# J5-12
 set_property PACKAGE_PIN D14 [get_ports cam_sioc]       ;# J5-13
 set_property PACKAGE_PIN C14 [get_ports cam_siod]       ;# J5-14
 set_property PACKAGE_PIN B11 [get_ports cam_reset_n]    ;# J5-15
-set_property PACKAGE_PIN D15 [get_ports cam_pclk]       ;# J5-20, IO_L12P_T1_MRCC_15
+set_property PACKAGE_PIN D15 [get_ports cam_pclk]       ;# J5-19, IO_L12P_T1_MRCC_15
 set_property IOSTANDARD LVCMOS33 [get_ports {cam_*}]

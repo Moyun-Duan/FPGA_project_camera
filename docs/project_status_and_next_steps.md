@@ -202,7 +202,7 @@ GUI方式：
 2. 查板卡原理图/手册，确认 100 MHz 时钟、复位、VGA、拨码开关、LED 引脚。
 3. 对照 `constraints/ego1_template.xdc` 检查 OV7670 到 J5 的每一根线。
 4. 确认摄像头供电电压、GND、SIOC/SIOD 上拉是否正确。
-5. 确认 `cam_pclk` 接到 XDC 中标注的 J5-20/MRCC 引脚。
+5. 确认 `cam_pclk` 接到 XDC 中标注的 J5-19/MRCC 引脚。
 
 ### 6.2 先验证 VGA
 

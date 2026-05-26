@@ -137,7 +137,7 @@ vivado_vga_only_build/fpga_vga_only.runs/impl_1/vga_only_top.bit
 
 ## 5. 在当前 Vivado 工程中建立不同 Synth/Impl Runs
 
-如果你希望在当前已经打开的 `fpga_vision_system.xpr` 里同时保留完整工程和 VGA-only 验证工程，不要反复手动切换同一个 `synth_1/impl_1`。推荐建立两套独立 run：
+如果你希望在当前已经打开的 `fpga_vision_system.xpr` 里同时保留完整工程和 VGA-only 验证工程，不要反复手动切换同一个 `synth_1/impl_1`。推荐建立两套独立 run，并让它们绑定不同的 source fileset 和 constraints fileset：
 
 ```text
 synth_vga_only   -> impl_vga_only
@@ -149,11 +149,13 @@ synth_vision_top -> impl_vision_top
 ```text
 synth_vga_only:
   顶层模块: vga_only_top
+  源码集合: sources_vga_only
   约束集合: constrs_vga_only
   约束文件: constraints/vga_only_ego1.xdc
 
 synth_vision_top:
   顶层模块: vision_top
+  源码集合: sources_1
   约束集合: constrs_vision
   约束文件: constraints/ego1_template.xdc
 ```
@@ -176,6 +178,7 @@ source vivado/add_vga_only_runs_to_current_project.tcl
 脚本会在当前工程中添加：
 
 ```text
+sources_vga_only
 constraints/vga_only_ego1.xdc
 rtl/vga_only_top.v
 constrs_vga_only
@@ -184,6 +187,18 @@ synth_vga_only
 impl_vga_only
 synth_vision_top
 impl_vision_top
+```
+
+Vivado 2017.4 中不要使用下面这种方式设置 synthesis run 顶层：
+
+```tcl
+set_property STEPS.SYNTH_DESIGN.ARGS.TOP vga_only_top [get_runs synth_vga_only]
+```
+
+该属性在 Vivado 2017.4 project run 对象上不存在。正确做法是让 `synth_vga_only` 绑定 `sources_vga_only`，并设置：
+
+```tcl
+set_property top vga_only_top [get_filesets sources_vga_only]
 ```
 
 运行 VGA-only 验证：
@@ -285,6 +300,13 @@ Parent Run: synth_vision_top
 
 ```tcl
 set_property STEPS.SYNTH_DESIGN.ARGS.TOP vision_top [get_runs synth_vision_top]
+```
+
+如果 Vivado 2017.4 报 `The object 'run' does not have a property 'STEPS.SYNTH_DESIGN.ARGS.TOP'`，不要继续使用上面两条 `STEPS.SYNTH_DESIGN.ARGS.TOP` 命令。改为：
+
+```tcl
+set_property top vga_only_top [get_filesets sources_vga_only]
+set_property top vision_top [get_filesets sources_1]
 ```
 
 然后分别右键 run：

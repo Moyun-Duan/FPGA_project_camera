@@ -10,7 +10,7 @@ actual board and camera adapter:
 - Slide switches used for `mode_sw`
 - VGA RGB, HSYNC, VSYNC pins
 - OV7670 `PCLK`, `VSYNC`, `HREF`, `D[7:0]`, `XCLK`, `SIOD`, `SIOC`, `RESET`, `PWDN`
-  wired to the J5 positions shown in the XDC comments. `PCLK` must use J5-20
+  wired to the J5 positions shown in the XDC comments. `PCLK` must use J5-19
   because it is the MRCC clock-capable pin used by the current RTL.
 
 Do not guess the camera adapter cable order. Wrong camera power or IO pin
