@@ -33,15 +33,12 @@ Use this order when hardware becomes available:
 The current top-level uses fabric-divided clocks from 100 MHz:
 
 - VGA pixel clock: approximately 25 MHz (`clk_100m / 4`)
-- OV7670 XCLK: selected by SW4:
-  - SW4=0: approximately 12.5 MHz (`clk_100m / 8`)
-  - SW4=1: approximately 25 MHz (`clk_100m / 4`)
+- OV7670 XCLK: approximately 25 MHz (`clk_100m / 4`)
 
-Use SW4=0 during bring-up to improve margin with DuPont-wire parallel camera
-connections. Use SW4=1 only to compare whether higher frame rate improves blur
-or exposure stability. Toggle SW4 before pressing RESET so the camera is
-re-initialized with a stable XCLK. A Clocking Wizard/MMCM is recommended before
-final timing closure.
+Earlier bring-up builds used 12.5 MHz to improve margin with DuPont-wire
+parallel camera connections. Hardware A/B testing showed 25 MHz is stable and
+gives smoother motion, so the current top-level fixes XCLK at 25 MHz. A Clocking
+Wizard/MMCM is recommended before final timing closure.
 
 ## 4. Common Hardware Issues
 

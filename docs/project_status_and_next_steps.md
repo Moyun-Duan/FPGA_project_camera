@@ -22,8 +22,8 @@ fpga_vision_system/
 - 模式选择：`mode_sw[1:0]`
   - `00`：灰度图。
   - `01`：高斯平滑灰度图。
-  - `10`：Sobel梯度幅值。
-  - `11`：素描风格，白底黑边。
+  - `10`：连续 Sobel 强度图。
+  - `11`：平滑灰度 + 黑色边缘叠加。
 
 当前主要 RTL：
 
@@ -90,7 +90,7 @@ vivado_*.backup.log
 3. 当前批处理脚本故意不生成 bitstream，因为摄像头排线尚未确认。确认接线后再生成 bitstream。
 4. 当前 `cam_siod` 使用 Verilog 三态推断。若 Vivado 或硬件表现异常，可改成显式 `IOBUF`。
 5. `sccb_master.v` 当前只发写序列，不采样 ACK；`camera_config_done` 代表写流程完成，不代表摄像头一定 ACK 成功。
-6. 当前 VGA 像素时钟约 25 MHz，摄像头 XCLK 可由 SW4 在 12.5 MHz/25 MHz 之间切换，均由 100 MHz 简单分频得到。课程验收可先用；若要求规范，后期改用 Clocking Wizard/MMCM。
+6. 当前 VGA 像素时钟约 25 MHz，摄像头 XCLK 固定约 25 MHz，均由 100 MHz 简单分频得到。课程验收可先用；若要求规范，后期改用 Clocking Wizard/MMCM。
 7. XDC 目前有基础时钟约束，但没有摄像头输入延迟、VGA输出延迟等板级 I/O 时序约束。课程项目通常可以先完成现象验证，再在报告中说明。
 8. Vivado DRC 提示缺少 `CFGBVS` 和 `CONFIG_VOLTAGE` 配置属性。生成最终 bitstream 前应按 EGO1 板卡配置电压补到 XDC。
 9. 图像滤波模式的边界像素不会完整产生 3x3窗口，这是正常现象。
@@ -217,7 +217,7 @@ VGA 单独验证通过后，再接摄像头链路。
 ### 6.3 验证摄像头时钟和初始化
 
 1. 下载工程前确认 XDC 接线无误。
-2. 用示波器/逻辑分析仪检查 `cam_xclk`：SW4=0 约 12.5 MHz，SW4=1 约 25 MHz。
+2. 用示波器/逻辑分析仪检查 `cam_xclk` 是否约 25 MHz。
 3. 检查 `cam_sioc` 和 `cam_siod` 是否有 SCCB 配置波形。
 4. 观察 `camera_config_done` LED 是否最终点亮。
 5. 检查 OV7670 是否输出 `cam_pclk`、`cam_href`、`cam_vsync`。
@@ -233,8 +233,8 @@ VGA 单独验证通过后，再接摄像头链路。
    - RGB565 字节顺序是否反了。
    - OV7670 是否实际输出 RGB565，而不是 YUV。
 3. 灰度图稳定后再切到 `10` 看 Sobel。
-4. 如果 Sobel 太黑或太白，调整 `rtl/sobel_pipeline.v` 中的 `THRESHOLD`。
-5. 最后测试 `11` 素描模式。
+4. 如果 Sobel 太黑或太白，调整 `rtl/pixel_filter_pipeline.v` 中的 `SOBEL_LOW_THRESHOLD` 和 `SOBEL_THRESHOLD`。
+5. 最后测试 `11` 边缘叠加模式。
 
 ### 6.5 生成 bitstream 和烧录
 
@@ -267,8 +267,8 @@ wait_on_run impl_1
 
 1. 固化最终 XDC：把实际使用的 OV7670 接线、拨码开关、LED、VGA 引脚全部确认并保留。
 2. 固化最终 OV7670 寄存器配置：记录摄像头输出格式、分辨率、PCLK、HREF/VSYNC 极性。
-3. 固化最终演示模式：至少保证灰度和 Sobel 两个模式稳定，素描模式作为展示增强。
-4. 调整 Sobel 阈值：根据实际光照选择一个最适合演示的 `THRESHOLD`。
+3. 固化最终演示模式：至少保证灰度、Sobel 强度图和边缘叠加图稳定。
+4. 调整 Sobel 低/高阈值：根据实际光照选择适合演示的 `SOBEL_LOW_THRESHOLD` 和 `SOBEL_THRESHOLD`。
 5. 补一个 VGA-only 测试或保留调试说明，便于答辩时解释排错流程。
 6. 用 Clocking Wizard/MMCM 替换简单分频，如果老师对时钟规范性要求较高。
 7. 拍摄或录制演示材料：原始场景、灰度输出、边缘输出、模式切换。
