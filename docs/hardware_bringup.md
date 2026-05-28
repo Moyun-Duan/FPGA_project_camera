@@ -30,9 +30,18 @@ Use this order when hardware becomes available:
 
 ## 3. Expected Clocking
 
-The offline top-level uses a simple divide-by-4 clock from 100 MHz to generate
-approximately 25 MHz for VGA and OV7670 XCLK. This is adequate for early classroom
-bring-up, but a Clocking Wizard/MMCM is recommended before final timing closure.
+The current top-level uses fabric-divided clocks from 100 MHz:
+
+- VGA pixel clock: approximately 25 MHz (`clk_100m / 4`)
+- OV7670 XCLK: selected by SW4:
+  - SW4=0: approximately 12.5 MHz (`clk_100m / 8`)
+  - SW4=1: approximately 25 MHz (`clk_100m / 4`)
+
+Use SW4=0 during bring-up to improve margin with DuPont-wire parallel camera
+connections. Use SW4=1 only to compare whether higher frame rate improves blur
+or exposure stability. Toggle SW4 before pressing RESET so the camera is
+re-initialized with a stable XCLK. A Clocking Wizard/MMCM is recommended before
+final timing closure.
 
 ## 4. Common Hardware Issues
 

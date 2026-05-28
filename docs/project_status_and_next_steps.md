@@ -90,7 +90,7 @@ vivado_*.backup.log
 3. 当前批处理脚本故意不生成 bitstream，因为摄像头排线尚未确认。确认接线后再生成 bitstream。
 4. 当前 `cam_siod` 使用 Verilog 三态推断。若 Vivado 或硬件表现异常，可改成显式 `IOBUF`。
 5. `sccb_master.v` 当前只发写序列，不采样 ACK；`camera_config_done` 代表写流程完成，不代表摄像头一定 ACK 成功。
-6. 当前 VGA 像素时钟和摄像头 XCLK 是用 100 MHz 简单分频得到约 25 MHz。课程验收可先用；若要求规范，后期改用 Clocking Wizard/MMCM。
+6. 当前 VGA 像素时钟约 25 MHz，摄像头 XCLK 可由 SW4 在 12.5 MHz/25 MHz 之间切换，均由 100 MHz 简单分频得到。课程验收可先用；若要求规范，后期改用 Clocking Wizard/MMCM。
 7. XDC 目前有基础时钟约束，但没有摄像头输入延迟、VGA输出延迟等板级 I/O 时序约束。课程项目通常可以先完成现象验证，再在报告中说明。
 8. Vivado DRC 提示缺少 `CFGBVS` 和 `CONFIG_VOLTAGE` 配置属性。生成最终 bitstream 前应按 EGO1 板卡配置电压补到 XDC。
 9. 图像滤波模式的边界像素不会完整产生 3x3窗口，这是正常现象。
@@ -217,7 +217,7 @@ VGA 单独验证通过后，再接摄像头链路。
 ### 6.3 验证摄像头时钟和初始化
 
 1. 下载工程前确认 XDC 接线无误。
-2. 用示波器/逻辑分析仪检查 `cam_xclk` 是否输出约 25 MHz。
+2. 用示波器/逻辑分析仪检查 `cam_xclk`：SW4=0 约 12.5 MHz，SW4=1 约 25 MHz。
 3. 检查 `cam_sioc` 和 `cam_siod` 是否有 SCCB 配置波形。
 4. 观察 `camera_config_done` LED 是否最终点亮。
 5. 检查 OV7670 是否输出 `cam_pclk`、`cam_href`、`cam_vsync`。

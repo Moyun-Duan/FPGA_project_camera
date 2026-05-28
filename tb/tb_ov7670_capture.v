@@ -6,6 +6,7 @@ module tb_ov7670_capture;
     reg vsync = 1'b0;
     reg href = 1'b0;
     reg [7:0] data = 8'd0;
+    reg yuv_byte_order = 1'b0;
 
     wire pixel_valid;
     wire [15:0] rgb565;
@@ -26,6 +27,7 @@ module tb_ov7670_capture;
         .vsync(vsync),
         .href(href),
         .data(data),
+        .yuv_byte_order(yuv_byte_order),
         .pixel_valid(pixel_valid),
         .rgb565(rgb565),
         .pixel_x(pixel_x),

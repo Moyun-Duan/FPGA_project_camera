@@ -25,6 +25,7 @@ module vision_top (
     localparam IMG_WIDTH  = 320;
     localparam IMG_HEIGHT = 240;
     localparam ADDR_WIDTH = 17;
+    localparam CAMERA_FORMAT = 1;  // 0: RGB565, 1: YUV YUYV luma, 2: YUV UYVY luma
 
     reg [1:0] clk_div;
     always @(posedge clk_100m or negedge reset_n) begin
@@ -47,6 +48,30 @@ module vision_top (
     reset_sync u_reset_cam (.clk(cam_pclk), .reset_n_async(reset_n), .reset(reset_cam));
     reset_sync u_reset_pix (.clk(pix_clk),  .reset_n_async(reset_n), .reset(reset_pix));
 
+    reg [1:0] mode_cam_meta;
+    reg [1:0] mode_cam;
+    always @(posedge cam_pclk) begin
+        if (reset_cam) begin
+            mode_cam_meta <= 2'b00;
+            mode_cam      <= 2'b00;
+        end else begin
+            mode_cam_meta <= mode_sw;
+            mode_cam      <= mode_cam_meta;
+        end
+    end
+
+    reg [1:0] mode_pix_meta;
+    reg [1:0] mode_pix;
+    always @(posedge pix_clk) begin
+        if (reset_pix) begin
+            mode_pix_meta <= 2'b00;
+            mode_pix      <= 2'b00;
+        end else begin
+            mode_pix_meta <= mode_sw;
+            mode_pix      <= mode_pix_meta;
+        end
+    end
+
     ov7670_init u_cam_init (
         .clk(clk_100m),
         .reset(reset_sys),
@@ -63,13 +88,15 @@ module vision_top (
 
     ov7670_capture #(
         .WIDTH(IMG_WIDTH),
-        .HEIGHT(IMG_HEIGHT)
+        .HEIGHT(IMG_HEIGHT),
+        .FORMAT(CAMERA_FORMAT)
     ) u_capture (
         .pclk(cam_pclk),
         .reset(reset_cam),
         .vsync(cam_vsync),
         .href(cam_href),
         .data(cam_data),
+        .yuv_byte_order(1'b1),
         .pixel_valid(cap_valid),
         .rgb565(cap_rgb565),
         .pixel_x(cap_x),
@@ -84,11 +111,14 @@ module vision_top (
 
     pixel_filter_pipeline #(
         .WIDTH(IMG_WIDTH),
-        .HEIGHT(IMG_HEIGHT)
+        .HEIGHT(IMG_HEIGHT),
+        .SOBEL_LOW_THRESHOLD(8'd48),
+        .SOBEL_THRESHOLD(8'd128)
     ) u_filter (
         .clk(cam_pclk),
         .reset(reset_cam),
-        .mode(mode_sw),
+        .mode(mode_cam),
+        .enhance_enable(1'b1),
         .pixel_valid(cap_valid),
         .rgb565(cap_rgb565),
         .pixel_x(cap_x),
@@ -137,15 +167,58 @@ module vision_top (
     );
 
     reg active_d;
+    reg [9:0] vga_x_d;
+    reg [9:0] vga_y_d;
     always @(posedge pix_clk) begin
-        if (reset_pix)
+        if (reset_pix) begin
             active_d <= 1'b0;
-        else
+            vga_x_d  <= 10'd0;
+            vga_y_d  <= 10'd0;
+        end else begin
             active_d <= vga_active;
+            vga_x_d  <= vga_x;
+            vga_y_d  <= vga_y;
+        end
     end
 
-    wire [3:0] gray4 = active_d ? fb_pixel[7:4] : 4'd0;
-    assign vga_r = gray4;
-    assign vga_g = gray4;
-    assign vga_b = gray4;
+    reg [3:0] dither_threshold;
+    always @* begin
+        case ({vga_y_d[0], vga_x_d[0]})
+            2'b00: dither_threshold = 4'd0;
+            2'b01: dither_threshold = 4'd8;
+            2'b10: dither_threshold = 4'd12;
+            default: dither_threshold = 4'd4;
+        endcase
+    end
+
+    wire dither_add = active_d &&
+                      (fb_pixel[7:4] != 4'hf) &&
+                      (fb_pixel[3:0] > dither_threshold);
+    wire [3:0] gray4 = active_d ? (fb_pixel[7:4] + {3'b000, dither_add}) : 4'd0;
+    wire [11:0] base_rgb = {gray4, gray4, gray4};
+
+    reg [11:0] mode_rgb;
+    always @* begin
+        case (mode_pix)
+            2'b00: mode_rgb = 12'h00f;
+            2'b01: mode_rgb = 12'h0f0;
+            2'b10: mode_rgb = 12'hf00;
+            default: mode_rgb = 12'hfff;
+        endcase
+    end
+
+    wire mode_box = active_d && (vga_x_d < 10'd56) && (vga_y_d < 10'd40);
+    wire mode_bar0 = mode_box && (vga_x_d >= 10'd4)  && (vga_x_d < 10'd16) && (vga_y_d >= 10'd4) && (vga_y_d < 10'd36);
+    wire mode_bar1 = mode_box && (vga_x_d >= 10'd22) && (vga_x_d < 10'd34) && (vga_y_d >= 10'd4) && (vga_y_d < 10'd36) && mode_pix[0];
+    wire mode_bar2 = mode_box && (vga_x_d >= 10'd40) && (vga_x_d < 10'd52) && (vga_y_d >= 10'd4) && (vga_y_d < 10'd36) && mode_pix[1];
+    wire mode_mark = mode_bar0 || mode_bar1 || mode_bar2;
+    wire border = active_d &&
+                  ((vga_x_d < 10'd4) || (vga_x_d >= 10'd636) ||
+                   (vga_y_d < 10'd4) || (vga_y_d >= 10'd476));
+
+    wire [11:0] out_rgb = (mode_mark || border) ? mode_rgb : base_rgb;
+
+    assign vga_r = out_rgb[11:8];
+    assign vga_g = out_rgb[7:4];
+    assign vga_b = out_rgb[3:0];
 endmodule

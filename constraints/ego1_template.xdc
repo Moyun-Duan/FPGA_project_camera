@@ -8,12 +8,14 @@ set_property PACKAGE_PIN P17 [get_ports clk_100m]
 set_property IOSTANDARD LVCMOS33 [get_ports clk_100m]
 create_clock -period 10.000 -name clk_100m [get_ports clk_100m]
 
-## Camera PCLK is board/module dependent. 24 MHz is a conservative OV7670 QVGA
-## bring-up target and can be adjusted after probing the real module.
-create_clock -period 41.667 -name cam_pclk [get_ports cam_pclk]
+## Camera PCLK is board/module dependent. 25 MHz is the current OV7670 QVGA
+## target because cam_xclk is fixed to clk_100m / 4.
+create_clock -period 40.000 -name cam_pclk [get_ports cam_pclk]
 
-## Temporary fabric-divided VGA/camera XCLK. Replace with Clocking Wizard/MMCM
-## before final bitstream if stricter timing practice is required.
+## Temporary fabric-divided VGA pixel clock. Camera XCLK is also fixed to
+## clk_100m / 4 = 25 MHz in rtl/vision_top.v after hardware A/B testing.
+## Replace both with Clocking Wizard/MMCM before final bitstream if stricter
+## timing practice is required.
 create_generated_clock -name pix_clk -source [get_ports clk_100m] -divide_by 4 [get_pins {clk_div_reg[1]/Q}]
 
 ## Reset, active low

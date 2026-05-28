@@ -48,6 +48,7 @@ constraints/vga_only_ego1.xdc
 docs/vga_only_bringup.md
 docs/pin_mapping_debug.md
 docs/ov7670_j5_wiring.md
+docs/image_quality_tuning.md
 docs/hardware_bringup.md
 docs/project_status_and_next_steps.md
 ```
@@ -190,6 +191,52 @@ cam_pclk 使用 FPGA 管脚 D15，对应 EGO1 J5-19。
 不是 J5-20。
 ```
 
+### 3.6 摄像头已有画面但质量待优化
+
+用户在完整工程上已经看到摄像头画面轮廓，但画面存在：
+
+```text
+整体偏黄
+噪声重
+图像不清晰
+mode_sw 四个模式差异不明显
+```
+
+已做第一轮 RTL 优化：
+
+```text
+1. 先将 cam_xclk 从 25 MHz 降到 12.5 MHz 以验证采样余量。
+2. mode_sw 同步到 cam_pclk 和 pix_clk 两个时钟域。
+3. VGA 左上角和边框新增模式颜色标识。
+4. Sobel 阈值提高到 128。
+5. mode 10/11 做了初版边缘/素描显示。
+```
+
+已做第二轮格式优化：
+
+```text
+1. OV7670 配置从 RGB565/QVGA 改为 YUV422/QVGA。
+2. ov7670_capture 增加 FORMAT 参数：
+   0 = RGB565
+   1 = YUV YUYV，只取 Y 亮度
+   2 = YUV UYVY，只取 Y 亮度
+3. vision_top 当前 CAMERA_FORMAT = 1。
+4. 实测 YUV 取样相位在原 SW2=1 时更清晰，现已写死为 `yuv_byte_order=1'b1`。
+5. 实测 25 MHz XCLK 不花屏且拖动更平滑，现已写死 `cam_xclk=25 MHz`。
+6. SW2/SW3/SW4 调试输入已从 `vision_top` 和完整工程 XDC 中移除。
+7. mode 01 默认使用 3x3 锐化灰度图，不再需要 SW3 控制。
+8. VGA 输出端新增 2x2 有序抖动，把帧缓存 8-bit 灰度的低 4 bit 转换为空间亮度，减少 4-bit VGA 灰阶断层。
+9. Sobel 显示已优化：
+   mode 10 = 连续 Sobel 强度图，不再是硬二值图。
+   mode 11 = 平滑灰度 + 黑色边缘叠加，保留场景上下文。
+```
+
+相关说明：
+
+```text
+docs/image_quality_tuning.md
+```
+
 ## 4. 当前必须遵守的硬件事实
 
 EGO1 J5 是 2x18 双排针，共 36 针。
@@ -307,7 +354,7 @@ report_drc
 1. 只接 VCC/GND，确认模块不发热。
 2. 断电。
 3. 接 XCLK、RESET、PWDN。
-4. 上电测 XCLK 是否约 25 MHz。
+4. 上电测 XCLK：约 25 MHz。
 5. 断电。
 6. 接 SIOC、SIOD。
 7. 上电观察 camera_config_done LED。
@@ -339,9 +386,9 @@ report_drc
 
 ```text
 00: 灰度图
-01: 平滑灰度图
-10: Sobel 边缘
-11: 素描风格
+01: 锐化灰度图
+10: 连续 Sobel 强度图
+11: 平滑灰度 + 黑色边缘叠加
 ```
 
 要求：
@@ -360,7 +407,7 @@ OV7670 模块针脚丝印和实际排针顺序
 OV7670 到 J5 的杜邦线连接
 SCCB 初始化是否被摄像头 ACK
 cam_pclk / href / vsync / data 是否正常输出
-RGB565 字节顺序是否正确
+YUV 字节顺序已写死为原 SW2=1 的相位；若后续异常再回退测试 FORMAT=2 或 RGB565
 HREF/VSYNC 极性是否和实际模块一致
 Sobel 阈值是否适合实际光照
 ```
@@ -370,9 +417,9 @@ Sobel 阈值是否适合实际光照
 ```text
 1. cam_siod 当前使用 Verilog 三态推断，后续可改为显式 IOBUF。
 2. SCCB master 当前不采样 ACK，camera_config_done 只代表写流程结束。
-3. 25 MHz 像素时钟/XCLK 当前由 fabric 分频产生，最终可改 Clocking Wizard/MMCM。
+3. 25 MHz VGA 像素时钟和 25 MHz 摄像头 XCLK 当前由 fabric 分频产生，最终可改 Clocking Wizard/MMCM。
 4. XDC 目前没有完整板级 input/output delay。
-5. Sobel 阈值后续需要按实物光照调整。
+5. Sobel 低阈值/高阈值后续需要按实物光照调整。
 ```
 
 ## 8. 下次继续时的优先顺序
@@ -398,5 +445,5 @@ Sobel 阈值是否适合实际光照
 VGA-only 已实物验证成功
 当前 OV7670 接线仍是最大风险
 PCLK 修正为 J5-19/D15
-完整摄像头链路还未完成实物闭环验证
+完整摄像头链路已经有画面，但图像质量和模式效果仍需调试
 ```

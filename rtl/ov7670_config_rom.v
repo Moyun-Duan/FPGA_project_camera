@@ -6,7 +6,7 @@ module ov7670_config_rom (
     output reg  [7:0] reg_data,
     output wire       valid
 );
-    localparam NUM_REGS = 8'd44;
+    localparam NUM_REGS = 8'd45;
 
     assign valid = (index < NUM_REGS);
 
@@ -16,7 +16,7 @@ module ov7670_config_rom (
         case (index)
             8'd0:  begin reg_addr = 8'h12; reg_data = 8'h80; end
             8'd1:  begin reg_addr = 8'h11; reg_data = 8'h01; end
-            8'd2:  begin reg_addr = 8'h12; reg_data = 8'h14; end
+            8'd2:  begin reg_addr = 8'h12; reg_data = 8'h10; end
             8'd3:  begin reg_addr = 8'h0C; reg_data = 8'h04; end
             8'd4:  begin reg_addr = 8'h3E; reg_data = 8'h19; end
             8'd5:  begin reg_addr = 8'h40; reg_data = 8'hD0; end
@@ -48,16 +48,17 @@ module ov7670_config_rom (
             8'd31: begin reg_addr = 8'h38; reg_data = 8'h71; end
             8'd32: begin reg_addr = 8'h39; reg_data = 8'h2A; end
             8'd33: begin reg_addr = 8'h3C; reg_data = 8'h78; end
-            8'd34: begin reg_addr = 8'h4D; reg_data = 8'h40; end
-            8'd35: begin reg_addr = 8'h4E; reg_data = 8'h20; end
-            8'd36: begin reg_addr = 8'h69; reg_data = 8'h00; end
-            8'd37: begin reg_addr = 8'h6B; reg_data = 8'h0A; end
-            8'd38: begin reg_addr = 8'h74; reg_data = 8'h10; end
-            8'd39: begin reg_addr = 8'h8D; reg_data = 8'h4F; end
-            8'd40: begin reg_addr = 8'h8E; reg_data = 8'h00; end
-            8'd41: begin reg_addr = 8'h8F; reg_data = 8'h00; end
-            8'd42: begin reg_addr = 8'hB0; reg_data = 8'h84; end
-            8'd43: begin reg_addr = 8'hB8; reg_data = 8'h0A; end
+            8'd34: begin reg_addr = 8'h3D; reg_data = 8'h88; end
+            8'd35: begin reg_addr = 8'h4D; reg_data = 8'h40; end
+            8'd36: begin reg_addr = 8'h4E; reg_data = 8'h20; end
+            8'd37: begin reg_addr = 8'h69; reg_data = 8'h00; end
+            8'd38: begin reg_addr = 8'h6B; reg_data = 8'h0A; end
+            8'd39: begin reg_addr = 8'h74; reg_data = 8'h10; end
+            8'd40: begin reg_addr = 8'h8D; reg_data = 8'h4F; end
+            8'd41: begin reg_addr = 8'h8E; reg_data = 8'h00; end
+            8'd42: begin reg_addr = 8'h8F; reg_data = 8'h00; end
+            8'd43: begin reg_addr = 8'hB0; reg_data = 8'h84; end
+            8'd44: begin reg_addr = 8'hB8; reg_data = 8'h0A; end
             default: begin reg_addr = 8'h00; reg_data = 8'h00; end
         endcase
     end

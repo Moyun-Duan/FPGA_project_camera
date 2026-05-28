@@ -2,11 +2,14 @@
 
 module pixel_filter_pipeline #(
     parameter WIDTH  = 320,
-    parameter HEIGHT = 240
+    parameter HEIGHT = 240,
+    parameter SOBEL_LOW_THRESHOLD = 8'd48,
+    parameter SOBEL_THRESHOLD = 8'd128
 ) (
     input  wire        clk,
     input  wire        reset,
     input  wire [1:0]  mode,
+    input  wire        enhance_enable,
     input  wire        pixel_valid,
     input  wire [15:0] rgb565,
     input  wire [8:0]  pixel_x,
@@ -51,7 +54,9 @@ module pixel_filter_pipeline #(
     wire [7:0] sobel_mag;
     wire       sobel_is_edge;
 
-    sobel_pipeline u_sobel (
+    sobel_pipeline #(
+        .THRESHOLD(SOBEL_THRESHOLD)
+    ) u_sobel (
         .clk(clk),
         .reset(reset),
         .window_valid(win_valid),
@@ -74,13 +79,37 @@ module pixel_filter_pipeline #(
 
     wire [7:0] gaussian_pixel = gaussian_sum[11:4];
 
+    wire [8:0] center_ext = {1'b0, p11};
+    wire [8:0] blur_ext = {1'b0, gaussian_pixel};
+    wire       center_ge_blur = (center_ext >= blur_ext);
+    wire [8:0] high_freq =
+        center_ge_blur ? (center_ext - blur_ext) : (blur_ext - center_ext);
+    wire [8:0] sharpen_step = high_freq >> 1;
+    wire [9:0] sharpen_up = {1'b0, center_ext} + {1'b0, sharpen_step};
+    wire [8:0] sharpen_down =
+        (center_ext > sharpen_step) ? (center_ext - sharpen_step) : 9'd0;
+    wire [7:0] sharpen_pixel =
+        center_ge_blur ?
+            ((sharpen_up > 10'd255) ? 8'd255 : sharpen_up[7:0]) :
+            sharpen_down[7:0];
+
+    reg [7:0] gaussian_pixel_d;
+    wire      sobel_soft_edge = (sobel_mag >= SOBEL_LOW_THRESHOLD);
+    wire [7:0] sobel_strength_pixel = sobel_soft_edge ? sobel_mag : 8'd0;
+    wire [7:0] sobel_overlay_pixel =
+        sobel_is_edge ? 8'd0 :
+        (sobel_soft_edge ? (gaussian_pixel_d >> 1) : gaussian_pixel_d);
+
     always @(posedge clk) begin
         if (reset) begin
             out_valid <= 1'b0;
             out_x     <= 9'd0;
             out_y     <= 8'd0;
             out_pixel <= 8'd0;
+            gaussian_pixel_d <= 8'd0;
         end else begin
+            gaussian_pixel_d <= gaussian_pixel;
+
             case (mode)
                 2'b00: begin
                     out_valid <= pixel_valid;
@@ -92,19 +121,19 @@ module pixel_filter_pipeline #(
                     out_valid <= win_valid;
                     out_x     <= win_x;
                     out_y     <= win_y;
-                    out_pixel <= gaussian_pixel;
+                    out_pixel <= enhance_enable ? sharpen_pixel : gaussian_pixel;
                 end
                 2'b10: begin
                     out_valid <= sobel_valid;
                     out_x     <= sobel_x;
                     out_y     <= sobel_y;
-                    out_pixel <= sobel_mag;
+                    out_pixel <= sobel_strength_pixel;
                 end
                 default: begin
                     out_valid <= sobel_valid;
                     out_x     <= sobel_x;
                     out_y     <= sobel_y;
-                    out_pixel <= sobel_is_edge ? 8'd0 : 8'd255;
+                    out_pixel <= sobel_overlay_pixel;
                 end
             endcase
         end

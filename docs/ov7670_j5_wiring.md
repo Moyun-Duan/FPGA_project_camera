@@ -46,7 +46,7 @@ J5-1  到 J5-32: FPGA IO
 | `D5` | `J5-9` | `F13` | 摄像头 -> FPGA | 数据 bit5 |
 | `D6` | `J5-10` | `F14` | 摄像头 -> FPGA | 数据 bit6 |
 | `D7` | `J5-11` | `B13` | 摄像头 -> FPGA | 数据 bit7 |
-| `XCLK` / `MCLK` | `J5-12` | `B14` | FPGA -> 摄像头 | 当前工程输出约 25 MHz |
+| `XCLK` / `MCLK` | `J5-12` | `B14` | FPGA -> 摄像头 | 当前工程固定约 25 MHz |
 | `SIOC` / `SCL` | `J5-13` | `D14` | FPGA -> 摄像头 | SCCB/I2C 时钟 |
 | `SIOD` / `SDA` | `J5-14` | `C14` | 双向 | SCCB/I2C 数据，通常需要上拉 |
 | `RESET` / `RST` | `J5-15` | `B11` | FPGA -> 摄像头 | 当前工程随 `reset_n` 释放 |

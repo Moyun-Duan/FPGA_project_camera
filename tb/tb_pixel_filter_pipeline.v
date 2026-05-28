@@ -4,6 +4,7 @@ module tb_pixel_filter_pipeline;
     reg clk = 1'b0;
     reg reset = 1'b1;
     reg [1:0] mode = 2'b10;
+    reg enhance_enable = 1'b0;
     reg pixel_valid = 1'b0;
     reg [15:0] rgb565 = 16'd0;
     reg [8:0] pixel_x = 9'd0;
@@ -27,6 +28,7 @@ module tb_pixel_filter_pipeline;
         .clk(clk),
         .reset(reset),
         .mode(mode),
+        .enhance_enable(enhance_enable),
         .pixel_valid(pixel_valid),
         .rgb565(rgb565),
         .pixel_x(pixel_x),
