@@ -13,7 +13,7 @@ module frame_buffer_gray #(
     input  wire [ADDR_WIDTH-1:0] rd_addr,
     output reg  [DATA_WIDTH-1:0] rd_data
 );
-    reg [DATA_WIDTH-1:0] mem [0:DEPTH-1];
+    (* ram_style = "block" *) reg [DATA_WIDTH-1:0] mem [0:DEPTH-1];
 
     always @(posedge wr_clk) begin
         if (wr_en)

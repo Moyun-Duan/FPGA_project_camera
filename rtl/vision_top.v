@@ -153,7 +153,7 @@ module vision_top (
     wire                  color_wr_en   = cap_valid &&
                                           (cap_x < IMG_WIDTH[8:0]) &&
                                           (cap_y < IMG_HEIGHT[7:0]);
-    wire [11:0] cap_rgb444 = {cap_rgb565[15:12], cap_rgb565[10:7], cap_rgb565[4:1]};
+    wire [8:0] cap_rgb333 = {cap_rgb565[15:13], cap_rgb565[10:8], cap_rgb565[4:2]};
 
     wire        vga_active;
     wire [9:0]  vga_x;
@@ -176,7 +176,7 @@ module vision_top (
     wire [7:0] rd_src_y = color_pixel_mode ? {src_y[7:2], 2'b00} : src_y;
     wire [ADDR_WIDTH-1:0] rd_addr = (rd_src_y * IMG_WIDTH) + rd_src_x;
     wire [7:0] fb_pixel;
-    wire [11:0] fb_rgb444;
+    wire [8:0] fb_rgb333;
 
     frame_buffer_gray #(
         .ADDR_WIDTH(ADDR_WIDTH),
@@ -194,16 +194,16 @@ module vision_top (
 
     frame_buffer_gray #(
         .ADDR_WIDTH(ADDR_WIDTH),
-        .DATA_WIDTH(12),
+        .DATA_WIDTH(9),
         .DEPTH(FB_DEPTH)
     ) u_color_frame_buffer (
         .wr_clk(cam_pclk),
         .wr_en(color_wr_en),
         .wr_addr(color_wr_addr),
-        .wr_data(cap_rgb444),
+        .wr_data(cap_rgb333),
         .rd_clk(pix_clk),
         .rd_addr(rd_addr),
-        .rd_data(fb_rgb444)
+        .rd_data(fb_rgb333)
     );
 
     reg active_d;
@@ -258,11 +258,15 @@ module vision_top (
         end
     endfunction
 
-    wire [11:0] color_raw_rgb = fb_rgb444;
+    wire [11:0] color_raw_rgb = {
+        fb_rgb333[8:6], fb_rgb333[8],
+        fb_rgb333[5:3], fb_rgb333[5],
+        fb_rgb333[2:0], fb_rgb333[2]
+    };
     wire [11:0] color_poster_rgb = {
-        posterize4(fb_rgb444[11:8]),
-        posterize4(fb_rgb444[7:4]),
-        posterize4(fb_rgb444[3:0])
+        posterize4(color_raw_rgb[11:8]),
+        posterize4(color_raw_rgb[7:4]),
+        posterize4(color_raw_rgb[3:0])
     };
     wire color_edge_hard = color_pixel_mode && (fb_pixel < 8'd32);
     wire color_edge_soft = color_pixel_mode && (fb_pixel < 8'd200);
