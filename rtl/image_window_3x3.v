@@ -2,31 +2,32 @@
 
 module image_window_3x3 #(
     parameter WIDTH  = 320,
-    parameter HEIGHT = 240
+    parameter HEIGHT = 240,
+    parameter DATA_WIDTH = 8
 ) (
     input  wire       clk,
     input  wire       reset,
     input  wire       in_valid,
-    input  wire [7:0] pixel_in,
+    input  wire [DATA_WIDTH-1:0] pixel_in,
     input  wire [8:0] pixel_x,
     input  wire [7:0] pixel_y,
     output reg        window_valid,
     output reg [8:0]  window_x,
     output reg [7:0]  window_y,
-    output reg [7:0]  p00,
-    output reg [7:0]  p01,
-    output reg [7:0]  p02,
-    output reg [7:0]  p10,
-    output reg [7:0]  p11,
-    output reg [7:0]  p12,
-    output reg [7:0]  p20,
-    output reg [7:0]  p21,
-    output reg [7:0]  p22
+    output reg [DATA_WIDTH-1:0] p00,
+    output reg [DATA_WIDTH-1:0] p01,
+    output reg [DATA_WIDTH-1:0] p02,
+    output reg [DATA_WIDTH-1:0] p10,
+    output reg [DATA_WIDTH-1:0] p11,
+    output reg [DATA_WIDTH-1:0] p12,
+    output reg [DATA_WIDTH-1:0] p20,
+    output reg [DATA_WIDTH-1:0] p21,
+    output reg [DATA_WIDTH-1:0] p22
 );
-    reg [7:0] line0 [0:WIDTH-1];
-    reg [7:0] line1 [0:WIDTH-1];
-    reg [7:0] row0_new;
-    reg [7:0] row1_new;
+    reg [DATA_WIDTH-1:0] line0 [0:WIDTH-1];
+    reg [DATA_WIDTH-1:0] line1 [0:WIDTH-1];
+    reg [DATA_WIDTH-1:0] row0_new;
+    reg [DATA_WIDTH-1:0] row1_new;
 
     always @(posedge clk) begin
         if (reset) begin

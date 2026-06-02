@@ -26,6 +26,12 @@ Verilog HDL
 G:\files\work\Grade_1_latter_class\Digital_system\FPGA_project\fpga_vision_system
 ```
 
+当前新增功能开发分支：
+
+```text
+feature/color-cartoon-pixel
+```
+
 ## 2. 主要文件
 
 完整摄像头工程：
@@ -223,12 +229,16 @@ mode_sw 四个模式差异不明显
 3. vision_top 当前 CAMERA_FORMAT = 1。
 4. 实测 YUV 取样相位在原 SW2=1 时更清晰，现已写死为 `yuv_byte_order=1'b1`。
 5. 实测 25 MHz XCLK 不花屏且拖动更平滑，现已写死 `cam_xclk=25 MHz`。
-6. SW2/SW3/SW4 调试输入已从 `vision_top` 和完整工程 XDC 中移除。
-7. mode 01 默认使用 3x3 锐化灰度图，不再需要 SW3 控制。
-8. VGA 输出端新增 2x2 有序抖动，把帧缓存 8-bit 灰度的低 4 bit 转换为空间亮度，减少 4-bit VGA 灰阶断层。
-9. Sobel 显示已优化：
-   mode 10 = 连续 Sobel 强度图，不再是硬二值图。
-   mode 11 = 平滑灰度 + 黑色边缘叠加，保留场景上下文。
+6. SW3/SW4 调试输入已从 `vision_top` 和完整工程 XDC 中移除。
+7. SW2/M4 作为 `style_page_sw` 扩展页选择：
+   SW2=0 保持原四种灰度/草图/漫画模式。
+   SW2=1 启用新增彩色模式，mode 00 为彩色原图，mode 01 为彩色像素漫画风。
+8. mode 01 在原功能页默认使用 3x3 锐化灰度图，不再需要 SW3 控制。
+9. VGA 输出端新增 2x2 有序抖动，把帧缓存 8-bit 灰度的低 4 bit 转换为空间亮度，减少 4-bit VGA 灰阶断层。
+10. 新增 12-bit RGB444 彩色帧缓存。YUV422 当前相位会转换为 RGB565，再写入彩色缓存。
+11. Sobel/漫画显示已优化：
+   mode 10 = 白底黑线草图，强边缘为黑线，弱边缘为浅灰线。
+   mode 11 = 五级灰度漫画化 + 黑色轮廓线，用少量灰阶色块模拟漫画/素描效果。
 ```
 
 相关说明：
@@ -385,10 +395,17 @@ report_drc
 完整工程 `mode_sw[1:0]`：
 
 ```text
+SW2 = 0: 原功能页
 00: 灰度图
 01: 锐化灰度图
-10: 连续 Sobel 强度图
-11: 平滑灰度 + 黑色边缘叠加
+10: 白底黑线草图
+11: 五级灰度漫画化 + 黑色轮廓线
+
+SW2 = 1: 彩色扩展页
+00: 彩色原图
+01: 彩色像素漫画风
+10: 白底黑线草图
+11: 五级灰度漫画化 + 黑色轮廓线
 ```
 
 要求：
