@@ -69,9 +69,8 @@ module tb_pixel_filter_pipeline;
         repeat (8) @(negedge clk);
 
         if (dark_edge_count < 4 || bright_background_count < 4) begin
-            $display("FAIL: expected dark Sobel edges and bright sketch background, edges=%0d background=%0d",
-                     dark_edge_count, bright_background_count);
-            $finish(1);
+            $fatal(1, "FAIL: expected dark Sobel edges and bright sketch background, edges=%0d background=%0d",
+                   dark_edge_count, bright_background_count);
         end
 
         $display("PASS: tb_pixel_filter_pipeline, dark edges=%0d bright background=%0d",

@@ -29,7 +29,7 @@ G:\files\work\Grade_1_latter_class\Digital_system\FPGA_project\fpga_vision_syste
 当前新增功能开发分支：
 
 ```text
-feature/color-cartoon-pixel
+feature/restore-gray-rgb565-color
 ```
 
 ## 2. 主要文件
@@ -38,6 +38,7 @@ feature/color-cartoon-pixel
 
 ```text
 rtl/vision_top.v
+rtl/vision_rgb565_color_top.v
 constraints/ego1_template.xdc
 ```
 
@@ -66,8 +67,9 @@ docs/project_status_and_next_steps.md
 当前完整工程已经包含以下模块：
 
 ```text
-rtl/vision_top.v              顶层集成
-rtl/ov7670_capture.v          OV7670 RGB565 采集
+rtl/vision_top.v              稳定 Y 通道灰度顶层集成
+rtl/vision_rgb565_color_top.v RGB565 彩色实验顶层
+rtl/ov7670_capture.v          OV7670 RGB565/YUV422 采集
 rtl/ov7670_init.v             OV7670 SCCB 初始化控制
 rtl/sccb_master.v             SCCB/I2C 写控制
 rtl/ov7670_config_rom.v       OV7670 配置 ROM
@@ -83,9 +85,9 @@ rtl/reset_sync.v              复位同步
 完整工程图像链路：
 
 ```text
-OV7670 RGB565
+OV7670 YUV422
 -> ov7670_capture
--> rgb565_to_gray / 3x3 window / Sobel
+-> direct Y luma / 3x3 window / Sobel
 -> frame_buffer_gray
 -> VGA 640x480 output
 ```
@@ -230,12 +232,10 @@ mode_sw 四个模式差异不明显
 4. 实测 YUV 取样相位在原 SW2=1 时更清晰，现已写死为 `yuv_byte_order=1'b1`。
 5. 实测 25 MHz XCLK 不花屏且拖动更平滑，现已写死 `cam_xclk=25 MHz`。
 6. SW3/SW4 调试输入已从 `vision_top` 和完整工程 XDC 中移除。
-7. SW2/M4 作为 `style_page_sw` 扩展页选择：
-   SW2=0 保持原四种灰度/草图/漫画模式。
-   SW2=1 启用新增彩色模式，mode 00 为彩色原图，mode 01 为彩色像素漫画风。
+7. SW2/M4 `style_page_sw` 在主 `vision_top` 中只保留端口兼容性，不再启用彩色页。
 8. mode 01 在原功能页默认使用 3x3 锐化灰度图，不再需要 SW3 控制。
 9. VGA 输出端新增 2x2 有序抖动，把帧缓存 8-bit 灰度的低 4 bit 转换为空间亮度，减少 4-bit VGA 灰阶断层。
-10. 新增 9-bit RGB333 彩色帧缓存。YUV422 当前相位会转换为 RGB565，再降为 RGB333 写入彩色缓存，以避免 BRAM/LUT 资源超限。
+10. 新增 `vision_rgb565_color_top` 独立彩色实验顶层，使用 RGB565 摄像头配置和 9-bit RGB333 彩色帧缓存。
 11. Sobel/漫画显示已优化：
    mode 10 = 白底黑线草图，强边缘为黑线，弱边缘为浅灰线。
    mode 11 = 五级灰度漫画化 + 黑色轮廓线，用少量灰阶色块模拟漫画/素描效果。
@@ -392,11 +392,20 @@ report_drc
 
 ### 6.4 图像显示验证
 
-完整工程 `mode_sw[1:0]`：
+主顶层 `vision_top` 的 `mode_sw[1:0]`：
 
 ```text
-SW2 = 0: 原功能页
 00: 灰度图
+01: 锐化灰度图
+10: 白底黑线草图
+11: 五级灰度漫画化 + 黑色轮廓线
+```
+
+`SW2/M4 style_page_sw` 在主顶层中不再切换彩色页。彩色实验需要把 Vivado top 改为 `vision_rgb565_color_top`：
+
+```text
+SW2 = 0: RGB565 摄像头下的灰度处理页
+00: RGB565 转灰度
 01: 锐化灰度图
 10: 白底黑线草图
 11: 五级灰度漫画化 + 黑色轮廓线
@@ -424,7 +433,7 @@ OV7670 模块针脚丝印和实际排针顺序
 OV7670 到 J5 的杜邦线连接
 SCCB 初始化是否被摄像头 ACK
 cam_pclk / href / vsync / data 是否正常输出
-YUV 字节顺序已写死为原 SW2=1 的相位；若后续异常再回退测试 FORMAT=2 或 RGB565
+YUV 字节顺序已写死为原 SW2=1 的相位；若后续异常先测 FORMAT=2，再切换 vision_rgb565_color_top 测 RGB565
 HREF/VSYNC 极性是否和实际模块一致
 Sobel 阈值是否适合实际光照
 ```

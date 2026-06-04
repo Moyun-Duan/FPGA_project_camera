@@ -224,14 +224,23 @@ rtl/ov7670_config_rom.v:
 
 rtl/vision_top.v:
   CAMERA_FORMAT = 1
+  YUV_TO_RGB = 0
+  yuv_byte_order = 1'b1
+  ov7670_init RGB565_CONFIG = 0
 
 rtl/ov7670_capture.v:
   FORMAT = 0: RGB565
   FORMAT = 1: YUV YUYV，只取 Y 字节
   FORMAT = 2: YUV UYVY，只取 Y 字节
 
+rtl/vision_rgb565_color_top.v:
+  独立彩色实验顶层
+  CAMERA_FORMAT = 0
+  ov7670_init RGB565_CONFIG = 1
+  使用 RGB333 彩色帧缓存显示 RGB565 摄像头数据
+
 constraints/ego1_template.xdc:
-  SW2/M4 = style_page_sw，用于原功能页/彩色扩展页选择
+  SW2/M4 = style_page_sw，主 vision_top 中保留接口但不再启用彩色页
   SW3/SW4 调试输入已移除
 ```
 
@@ -251,13 +260,24 @@ cam_xclk = 25 MHz
 3. 25 MHz XCLK 不花屏，运动更平滑，优于 12.5 MHz。
 ```
 
-## 8. 固定显示模式
+## 8. 固定显示模式与彩色实验顶层
 
-完整工程当前显示模式：
+主顶层 `vision_top` 当前固定为稳定灰度/素描链路：
 
 ```text
-SW2 = 0: 原功能页
 00: 原始灰度，作为判断采集质量的基准
+01: 3x3 锐化灰度
+10: 白底黑线草图
+11: 五级灰度漫画化 + 黑色轮廓线
+```
+
+`SW2/M4 style_page_sw` 在主顶层中只保留端口兼容性，不再切换彩色页。
+
+彩色功能已移动到独立实验顶层 `vision_rgb565_color_top`：
+
+```text
+SW2 = 0: RGB565 摄像头下的灰度处理页
+00: RGB565 转灰度
 01: 3x3 锐化灰度
 10: 白底黑线草图
 11: 五级灰度漫画化 + 黑色轮廓线
@@ -269,15 +289,14 @@ SW2 = 1: 彩色扩展页
 11: 五级灰度漫画化 + 黑色轮廓线
 ```
 
-彩色扩展页新增了 9-bit RGB333 帧缓存。当前 OV7670 仍配置为 YUV422，采集模块在已验证的 UYVY 相位下把 YUV 转成 RGB565，再降到 RGB333 写入彩色缓存。这样可以保留原 8-bit 灰度缓存，同时避免 BRAM/LUT 资源超限。
+彩色实验顶层新增了 9-bit RGB333 帧缓存。它把 OV7670 配置为 RGB565，直接把采集到的 RGB565 降到 RGB333 写入彩色缓存，同时保留 8-bit 灰度处理缓存。
 
-如果两种 YUV 格式都明显不对，再回退 RGB565：
+如果主顶层两种 YUV 格式都明显不对，再切换到 `vision_rgb565_color_top` 测 RGB565：
 
-```verilog
-localparam CAMERA_FORMAT = 0;
+```tcl
+set_property top vision_rgb565_color_top [get_filesets sources_1]
+update_compile_order -fileset sources_1
 ```
-
-并把 `rtl/ov7670_config_rom.v` 中 `COM7` 改回 RGB/QVGA 配置。
 
 ## 9. 分辨率上限
 

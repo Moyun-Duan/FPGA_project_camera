@@ -18,18 +18,20 @@ fpga_vision_system/
 - 摄像头：OV7670。
 - 显示：VGA 640x480。
 - 内部处理分辨率：320x240，再以 2 倍最近邻方式输出到 VGA。
-- 功能链路：OV7670 RGB565 采集 -> 灰度转换 -> 3x3窗口 -> 高斯平滑/Sobel边缘 -> 帧缓存 -> VGA显示。
+- 功能链路：主顶层使用 OV7670 YUV422 采集并直接取 Y 亮度 -> 3x3窗口 -> 锐化/Sobel/漫画化 -> 帧缓存 -> VGA显示。
 - 模式选择：`mode_sw[1:0]`
-  - `00`：灰度图。
-  - `01`：高斯平滑灰度图。
-  - `SW2=0`：原功能页，`00/01/10/11` 分别为灰度、锐化灰度、白底黑线草图、五级灰度漫画化。
-  - `SW2=1`：彩色扩展页，`00` 为彩色原图，`01` 为彩色像素漫画风，`10/11` 保持原草图/漫画模式。
+  - `00`：直接 Y 通道灰度图。
+  - `01`：锐化灰度图。
+  - `10`：白底黑线草图。
+  - `11`：五级灰度漫画化 + 黑色轮廓线。
+- 彩色实验已拆到 `rtl/vision_rgb565_color_top.v`，该顶层使用 OV7670 RGB565 配置和独立 RGB333 彩色帧缓存。
 
 当前主要 RTL：
 
 ```text
-rtl/vision_top.v              顶层集成
-rtl/ov7670_capture.v          OV7670 RGB565 字节采集
+rtl/vision_top.v              稳定 Y 通道灰度顶层集成
+rtl/vision_rgb565_color_top.v RGB565 彩色实验顶层
+rtl/ov7670_capture.v          OV7670 RGB565/YUV422 字节采集
 rtl/ov7670_init.v             OV7670 初始化控制
 rtl/sccb_master.v             SCCB/I2C写控制
 rtl/ov7670_config_rom.v       OV7670寄存器配置表
@@ -147,7 +149,7 @@ cd G:\files\work\Grade_1_latter_class\Digital_system\FPGA_project\fpga_vision_sy
 
 该脚本会检查：
 
-- OV7670 RGB565 双字节拼接和坐标计数。
+- OV7670 RGB565 双字节拼接、YUV 直接取 Y 和坐标计数。
 - 灰度/窗口/Sobel处理链路是否能对人工边缘产生响应。
 - 全部 RTL 文件是否能以 `vision_top` 为顶层完成编译检查。
 

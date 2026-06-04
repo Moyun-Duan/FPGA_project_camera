@@ -3,7 +3,8 @@
 module ov7670_capture #(
     parameter WIDTH  = 320,
     parameter HEIGHT = 240,
-    parameter FORMAT = 0
+    parameter FORMAT = 0,
+    parameter YUV_TO_RGB = 0
 ) (
     input  wire        pclk,
     input  wire        reset,
@@ -126,7 +127,7 @@ module ov7670_capture #(
                     end
 
                     FORMAT_YUV_YUYV: begin
-                        if (yuv_byte_order) begin
+                        if (YUV_TO_RGB && yuv_byte_order) begin
                             case (byte_phase)
                                 2'd0: u_byte <= data;
                                 2'd1: y0_byte <= data;
@@ -149,7 +150,8 @@ module ov7670_capture #(
                                 end
                             endcase
                         end else begin
-                            if ((byte_phase == 2'd0) || (byte_phase == 2'd2)) begin
+                            if ((!yuv_byte_order && ((byte_phase == 2'd0) || (byte_phase == 2'd2))) ||
+                                ( yuv_byte_order && ((byte_phase == 2'd1) || (byte_phase == 2'd3)))) begin
                                 if (pixel_x < WIDTH[8:0] && pixel_y < HEIGHT[7:0]) begin
                                     rgb565      <= gray_to_rgb565(data);
                                     pixel_valid <= 1'b1;
@@ -162,7 +164,7 @@ module ov7670_capture #(
                     end
 
                     FORMAT_YUV_UYVY: begin
-                        if (!yuv_byte_order) begin
+                        if (YUV_TO_RGB && !yuv_byte_order) begin
                             case (byte_phase)
                                 2'd0: u_byte <= data;
                                 2'd1: y0_byte <= data;
@@ -185,7 +187,8 @@ module ov7670_capture #(
                                 end
                             endcase
                         end else begin
-                            if ((byte_phase == 2'd0) || (byte_phase == 2'd2)) begin
+                            if ((!yuv_byte_order && ((byte_phase == 2'd1) || (byte_phase == 2'd3))) ||
+                                ( yuv_byte_order && ((byte_phase == 2'd0) || (byte_phase == 2'd2)))) begin
                                 if (pixel_x < WIDTH[8:0] && pixel_y < HEIGHT[7:0]) begin
                                     rgb565      <= gray_to_rgb565(data);
                                     pixel_valid <= 1'b1;
