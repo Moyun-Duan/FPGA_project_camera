@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module scharr_pipeline (
+module adaptive_scharr_pipeline (
     input  wire       clk,
     input  wire       reset,
     input  wire       window_valid,
@@ -15,8 +15,19 @@ module scharr_pipeline (
     output reg [7:0]  magnitude,
     output reg        is_edge
 );
-    parameter THRESHOLD = 8'd80;
+    // 计算窗口内平均亮度
+    wire [10:0] sum = {3'd0, p00} + {3'd0, p01} + {3'd0, p02} +
+                      {3'd0, p10} + {3'd0, p11} + {3'd0, p12} +
+                      {3'd0, p20} + {3'd0, p21} + {3'd0, p22};
+    wire [7:0] avg_luma = sum[10:3];  // 除以9
 
+    reg [7:0] avg_luma_d;
+    always @(posedge clk) avg_luma_d <= avg_luma;
+
+    reg [7:0] adaptive_threshold;
+    always @(*) adaptive_threshold = 8'd48 + (avg_luma_d >> 2);  // 阈值随亮度线性增加
+
+    // Scharr算子与方案2相同
     reg signed [12:0] gx, gy;
     reg [12:0] abs_gx, abs_gy;
     reg [13:0] mag_sum;
@@ -35,14 +46,12 @@ module scharr_pipeline (
             out_x <= window_x;
             out_y <= window_y;
 
-            // Scharr Gx: [3,0,-3; 10,0,-10; 3,0,-3]
             gx = -$signed({5'd0, p00}) * 3
                  + $signed({5'd0, p02}) * 3
                  -$signed({5'd0, p10}) * 10
                  + $signed({5'd0, p12}) * 10
                  -$signed({5'd0, p20}) * 3
                  + $signed({5'd0, p22}) * 3;
-            // Scharr Gy: [3,10,3; 0,0,0; -3,-10,-3]
             gy =  $signed({5'd0, p00}) * 3
                  + $signed({5'd0, p01}) * 10
                  + $signed({5'd0, p02}) * 3
@@ -55,7 +64,7 @@ module scharr_pipeline (
             mag_sum = abs_gx + abs_gy;
 
             magnitude <= (mag_sum > 14'd255) ? 8'd255 : mag_sum[7:0];
-            is_edge <= (mag_sum > {6'd0, THRESHOLD});
+            is_edge <= (mag_sum > {6'd0, adaptive_threshold});
         end
     end
 endmodule
