@@ -54,9 +54,7 @@ module pixel_filter_pipeline #(
     wire [7:0] sobel_mag;
     wire       sobel_is_edge;
 
-    adaptive_scharr_pipeline #(
-        .THRESHOLD(SOBEL_THRESHOLD)
-    ) u_sobel (
+    adaptive_scharr_pipeline u_sobel (
         .clk(clk),
         .reset(reset),
         .window_valid(win_valid),
