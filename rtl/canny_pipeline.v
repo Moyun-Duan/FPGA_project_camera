@@ -102,7 +102,7 @@ module canny_pipeline (
         end
     end
 
-    wire nms_suppress;
+    reg nms_suppress;
     reg nms_result;
     always @(*) begin
         case (dir_center)
