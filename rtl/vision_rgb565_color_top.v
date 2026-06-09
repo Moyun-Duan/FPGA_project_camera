@@ -28,6 +28,7 @@ module vision_rgb565_color_top (
     localparam ADDR_WIDTH = 17;
     localparam FB_DEPTH   = IMG_WIDTH * IMG_HEIGHT;
     localparam CAMERA_FORMAT = 0;  // RGB565 camera output
+    localparam RGB565_BYTE_SWAP = 1'b0;  // Set to 1 if SW2=1/mode 01 has correct colors.
 
     reg [1:0] clk_div;
     always @(posedge clk_100m or negedge reset_n) begin
@@ -125,8 +126,12 @@ module vision_rgb565_color_top (
     wire [8:0]  filt_x;
     wire [7:0]  filt_y;
     wire [7:0]  filt_pixel;
-    wire [1:0]  filter_mode_cam =
-        (style_page_cam && (mode_cam == 2'b01)) ? 2'b10 : mode_cam;
+    wire        color_byte_test_cam = style_page_cam && (mode_cam == 2'b01);
+    wire        color_style_cam = style_page_cam && mode_cam[1];
+    wire        byte_swap_cam = color_byte_test_cam || (color_style_cam && RGB565_BYTE_SWAP);
+    wire [15:0] cap_rgb565_swap = {cap_rgb565[7:0], cap_rgb565[15:8]};
+    wire [15:0] cap_rgb565_debug = byte_swap_cam ? cap_rgb565_swap : cap_rgb565;
+    wire [1:0]  filter_mode_cam = style_page_cam ? (mode_cam[1] ? 2'b10 : 2'b00) : mode_cam;
 
     pixel_filter_pipeline #(
         .WIDTH(IMG_WIDTH),
@@ -139,7 +144,7 @@ module vision_rgb565_color_top (
         .mode(filter_mode_cam),
         .enhance_enable(1'b1),
         .pixel_valid(cap_valid),
-        .rgb565(cap_rgb565),
+        .rgb565(cap_rgb565_debug),
         .pixel_x(cap_x),
         .pixel_y(cap_y),
         .out_valid(filt_valid),
@@ -156,7 +161,11 @@ module vision_rgb565_color_top (
     wire                  color_wr_en   = cap_valid &&
                                           (cap_x < IMG_WIDTH[8:0]) &&
                                           (cap_y < IMG_HEIGHT[7:0]);
-    wire [8:0] cap_rgb333 = {cap_rgb565[15:13], cap_rgb565[10:8], cap_rgb565[4:2]};
+    wire [8:0] cap_rgb333 = {
+        cap_rgb565_debug[15:13],
+        cap_rgb565_debug[10:8],
+        cap_rgb565_debug[4:2]
+    };
 
     wire        vga_active;
     wire [9:0]  vga_x;
@@ -174,7 +183,11 @@ module vision_rgb565_color_top (
 
     wire [8:0] src_x = vga_x[9:1];
     wire [7:0] src_y = vga_y[8:1];
-    wire       color_pixel_mode = style_page_pix && (mode_pix == 2'b01);
+    wire       color_page = style_page_pix;
+    wire       color_raw_mode = color_page && (mode_pix == 2'b00);
+    wire       color_byte_test_mode = color_page && (mode_pix == 2'b01);
+    wire       color_pixel_mode = color_page && (mode_pix == 2'b10);
+    wire       color_anime_mode = color_page && (mode_pix == 2'b11);
     wire [8:0] rd_src_x = color_pixel_mode ? {src_x[8:2], 2'b00} : src_x;
     wire [7:0] rd_src_y = color_pixel_mode ? {src_y[7:2], 2'b00} : src_y;
     wire [ADDR_WIDTH-1:0] rd_addr = (rd_src_y * IMG_WIDTH) + rd_src_x;
@@ -254,6 +267,22 @@ module vision_rgb565_color_top (
         end
     endfunction
 
+    function [3:0] anime_tone4;
+        input [3:0] value;
+        begin
+            if (value < 4'd3)
+                anime_tone4 = 4'd1;
+            else if (value < 4'd7)
+                anime_tone4 = 4'd5;
+            else if (value < 4'd11)
+                anime_tone4 = 4'd10;
+            else if (value < 4'd14)
+                anime_tone4 = 4'd13;
+            else
+                anime_tone4 = 4'd15;
+        end
+    endfunction
+
     function [3:0] darken4;
         input [3:0] value;
         begin
@@ -271,8 +300,13 @@ module vision_rgb565_color_top (
         posterize4(color_raw_rgb[7:4]),
         posterize4(color_raw_rgb[3:0])
     };
-    wire color_edge_hard = color_pixel_mode && (fb_pixel < 8'd32);
-    wire color_edge_soft = color_pixel_mode && (fb_pixel < 8'd200);
+    wire [11:0] color_anime_base = {
+        anime_tone4(color_raw_rgb[11:8]),
+        anime_tone4(color_raw_rgb[7:4]),
+        anime_tone4(color_raw_rgb[3:0])
+    };
+    wire color_edge_hard = (color_pixel_mode || color_anime_mode) && (fb_pixel < 8'd32);
+    wire color_edge_soft = (color_pixel_mode || color_anime_mode) && (fb_pixel < 8'd200);
     wire [11:0] color_pixel_rgb =
         color_edge_hard ? 12'h000 :
         color_edge_soft ? {
@@ -280,9 +314,17 @@ module vision_rgb565_color_top (
             darken4(color_poster_rgb[7:4]),
             darken4(color_poster_rgb[3:0])
         } : color_poster_rgb;
+    wire [11:0] color_anime_rgb =
+        color_edge_hard ? 12'h000 :
+        color_edge_soft ? {
+            darken4(color_anime_base[11:8]),
+            darken4(color_anime_base[7:4]),
+            darken4(color_anime_base[3:0])
+        } : color_anime_base;
     wire [11:0] image_rgb =
-        (style_page_pix && (mode_pix == 2'b00)) ? color_raw_rgb :
-        color_pixel_mode ? color_pixel_rgb : base_rgb;
+        (color_raw_mode || color_byte_test_mode) ? color_raw_rgb :
+        color_pixel_mode ? color_pixel_rgb :
+        color_anime_mode ? color_anime_rgb : base_rgb;
 
     reg [11:0] mode_rgb;
     always @* begin

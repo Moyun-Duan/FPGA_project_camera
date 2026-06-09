@@ -57,6 +57,17 @@ OV7670 for RGB565 and keeps the RGB333 color frame buffer isolated from
 `vision_top`. To try it in Vivado, set the top module to
 `vision_rgb565_color_top`.
 
+On the RGB565 color top, `SW2=1` selects the color recognition/style page:
+
+- `00`: direct RGB565 color
+- `01`: direct RGB565 color with byte order swapped, for byte-order recognition
+- `10`: color pixel-cartoon style with 4x4 block sampling, tone bands, and dark Sobel outlines
+- `11`: anime-style color blocks with tone bands and dark Sobel outlines
+
+If `SW2=1, mode=01` is the correct color order on the real OV7670 module, set
+`RGB565_BYTE_SWAP` in `vision_rgb565_color_top.v` to `1'b1` so the stylized
+color modes use the swapped byte order too.
+
 The internal processing resolution is 320x240. VGA output is 640x480, using 2x
 nearest-neighbor scaling from the processed frame buffer.
 

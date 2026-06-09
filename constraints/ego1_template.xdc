@@ -27,8 +27,8 @@ set_property PACKAGE_PIN R1 [get_ports {mode_sw[0]}]
 set_property PACKAGE_PIN N4 [get_ports {mode_sw[1]}]
 set_property IOSTANDARD LVCMOS33 [get_ports {mode_sw[*]}]
 
-## Style page switch. SW2=0 keeps the original four modes; SW2=1 enables
-## added color modes for mode_sw 00/01.
+## Style page switch. The stable grayscale top keeps this port for board
+## compatibility. The RGB565 color top uses SW2=1 as its debug page.
 set_property PACKAGE_PIN M4 [get_ports style_page_sw]
 set_property IOSTANDARD LVCMOS33 [get_ports style_page_sw]
 
