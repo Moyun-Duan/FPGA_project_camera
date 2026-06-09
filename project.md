@@ -26,6 +26,12 @@ Verilog HDL
 G:\files\work\Grade_1_latter_class\Digital_system\FPGA_project\fpga_vision_system
 ```
 
+最终合并目标分支：
+
+```text
+main
+```
+
 ## 2. 主要文件
 
 完整摄像头工程：
@@ -60,8 +66,8 @@ docs/project_status_and_next_steps.md
 当前完整工程已经包含以下模块：
 
 ```text
-rtl/vision_top.v              顶层集成
-rtl/ov7670_capture.v          OV7670 RGB565 采集
+rtl/vision_top.v              稳定 Y 通道灰度顶层集成
+rtl/ov7670_capture.v          OV7670 RGB565/YUV422 采集
 rtl/ov7670_init.v             OV7670 SCCB 初始化控制
 rtl/sccb_master.v             SCCB/I2C 写控制
 rtl/ov7670_config_rom.v       OV7670 配置 ROM
@@ -77,9 +83,9 @@ rtl/reset_sync.v              复位同步
 完整工程图像链路：
 
 ```text
-OV7670 RGB565
+OV7670 YUV422
 -> ov7670_capture
--> rgb565_to_gray / 3x3 window / Sobel
+-> direct Y luma / 3x3 window / Sobel
 -> frame_buffer_gray
 -> VGA 640x480 output
 ```
@@ -223,12 +229,13 @@ mode_sw 四个模式差异不明显
 3. vision_top 当前 CAMERA_FORMAT = 1。
 4. 实测 YUV 取样相位在原 SW2=1 时更清晰，现已写死为 `yuv_byte_order=1'b1`。
 5. 实测 25 MHz XCLK 不花屏且拖动更平滑，现已写死 `cam_xclk=25 MHz`。
-6. SW2/SW3/SW4 调试输入已从 `vision_top` 和完整工程 XDC 中移除。
-7. mode 01 默认使用 3x3 锐化灰度图，不再需要 SW3 控制。
-8. VGA 输出端新增 2x2 有序抖动，把帧缓存 8-bit 灰度的低 4 bit 转换为空间亮度，减少 4-bit VGA 灰阶断层。
-9. Sobel 显示已优化：
-   mode 10 = 连续 Sobel 强度图，不再是硬二值图。
-   mode 11 = 平滑灰度 + 黑色边缘叠加，保留场景上下文。
+6. SW3/SW4 调试输入已从 `vision_top` 和完整工程 XDC 中移除。
+7. SW2/M4 `style_page_sw` 在主 `vision_top` 中只保留端口兼容性，不再启用彩色页。
+8. mode 01 在原功能页默认使用 3x3 锐化灰度图，不再需要 SW3 控制。
+9. VGA 输出端新增 2x2 有序抖动，把帧缓存 8-bit 灰度的低 4 bit 转换为空间亮度，减少 4-bit VGA 灰阶断层。
+10. Sobel/漫画显示已优化：
+   mode 10 = 白底黑线草图，强边缘为黑线，弱边缘为浅灰线。
+   mode 11 = 五级灰度漫画化 + 黑色轮廓线，用少量灰阶色块模拟漫画/素描效果。
 ```
 
 相关说明：
@@ -382,14 +389,16 @@ report_drc
 
 ### 6.4 图像显示验证
 
-完整工程 `mode_sw[1:0]`：
+主顶层 `vision_top` 的 `mode_sw[1:0]`：
 
 ```text
 00: 灰度图
 01: 锐化灰度图
-10: 连续 Sobel 强度图
-11: 平滑灰度 + 黑色边缘叠加
+10: 白底黑线草图
+11: 五级灰度漫画化 + 黑色轮廓线
 ```
+
+`SW2/M4 style_page_sw` 在主顶层中不再切换彩色页，仅保留端口兼容性。
 
 要求：
 
@@ -407,7 +416,7 @@ OV7670 模块针脚丝印和实际排针顺序
 OV7670 到 J5 的杜邦线连接
 SCCB 初始化是否被摄像头 ACK
 cam_pclk / href / vsync / data 是否正常输出
-YUV 字节顺序已写死为原 SW2=1 的相位；若后续异常再回退测试 FORMAT=2 或 RGB565
+YUV 字节顺序已写死为原 SW2=1 的相位；若后续异常先测 FORMAT=2
 HREF/VSYNC 极性是否和实际模块一致
 Sobel 阈值是否适合实际光照
 ```

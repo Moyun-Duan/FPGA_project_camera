@@ -17,7 +17,8 @@ module tb_pixel_filter_pipeline;
 
     integer x;
     integer y;
-    integer edge_like_count;
+    integer dark_edge_count;
+    integer bright_background_count;
 
     always #5 clk = ~clk;
 
@@ -40,12 +41,15 @@ module tb_pixel_filter_pipeline;
     );
 
     always @(posedge clk) begin
-        if (out_valid && out_pixel > 8'd100)
-            edge_like_count <= edge_like_count + 1;
+        if (out_valid && out_pixel < 8'd100)
+            dark_edge_count <= dark_edge_count + 1;
+        if (out_valid && out_pixel > 8'd200)
+            bright_background_count <= bright_background_count + 1;
     end
 
     initial begin
-        edge_like_count = 0;
+        dark_edge_count = 0;
+        bright_background_count = 0;
         repeat (4) @(negedge clk);
         reset = 1'b0;
 
@@ -64,12 +68,13 @@ module tb_pixel_filter_pipeline;
         rgb565 = 16'd0;
         repeat (8) @(negedge clk);
 
-        if (edge_like_count < 4) begin
-            $display("FAIL: expected Sobel responses around synthetic edge, got %0d", edge_like_count);
-            $finish(1);
+        if (dark_edge_count < 4 || bright_background_count < 4) begin
+            $fatal(1, "FAIL: expected dark Sobel edges and bright sketch background, edges=%0d background=%0d",
+                   dark_edge_count, bright_background_count);
         end
 
-        $display("PASS: tb_pixel_filter_pipeline, edge responses=%0d", edge_like_count);
+        $display("PASS: tb_pixel_filter_pipeline, dark edges=%0d bright background=%0d",
+                 dark_edge_count, bright_background_count);
         $finish;
     end
 endmodule

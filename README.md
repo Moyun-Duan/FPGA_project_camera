@@ -6,7 +6,7 @@ vision pipeline for OV7670 camera input, grayscale/Sobel processing, and VGA out
 Target from proposal:
 
 - Board: EGO1 FPGA development board
-- Camera: OV7670, preferably RGB565 output
+- Camera: OV7670, with the stable top using YUV422 luma capture
 - Display: VGA
 - Toolchain: Vivado 2017, Verilog
 - Basic feature: camera frame -> grayscale/Sobel pipeline -> VGA display
@@ -36,14 +36,20 @@ fpga_vision_system/
   vivado/              Vivado project Tcl
 ```
 
-## Display Modes
+## Top-Level
 
-`mode_sw[1:0]` selects the frame written into the display buffer:
+`rtl/vision_top.v` is the stable grayscale/sketch top. It configures the OV7670
+for YUV422 and captures only the Y luma byte.
 
-- `00`: grayscale
-- `01`: 3x3 Gaussian-smoothed grayscale
-- `10`: Sobel gradient magnitude
-- `11`: sketch style, white background with dark edges
+`mode_sw[1:0]` selects the stable top display mode:
+
+- `00`: direct grayscale from the Y channel
+- `01`: sharpened grayscale
+- `10`: white-background sketch with dark edges
+- `11`: grayscale cartoon tone bands with dark edges
+
+`style_page_sw` is kept in the port list for board compatibility, but the stable
+top no longer uses it to enable color output.
 
 The internal processing resolution is 320x240. VGA output is 640x480, using 2x
 nearest-neighbor scaling from the processed frame buffer.
@@ -58,7 +64,7 @@ From this directory:
 
 The script checks:
 
-- OV7670 RGB565 byte pairing and pixel coordinate generation
+- OV7670 RGB565 byte pairing, YUV luma extraction, and pixel coordinate generation
 - grayscale/window/Gaussian/Sobel pipeline behavior on a synthetic edge image
 - full RTL source-set compilation with `vision_top` included
 

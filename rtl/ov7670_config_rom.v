@@ -1,6 +1,8 @@
 `timescale 1ns/1ps
 
-module ov7670_config_rom (
+module ov7670_config_rom #(
+    parameter RGB565_CONFIG = 0
+) (
     input  wire [7:0] index,
     output reg  [7:0] reg_addr,
     output reg  [7:0] reg_data,
@@ -16,7 +18,7 @@ module ov7670_config_rom (
         case (index)
             8'd0:  begin reg_addr = 8'h12; reg_data = 8'h80; end
             8'd1:  begin reg_addr = 8'h11; reg_data = 8'h01; end
-            8'd2:  begin reg_addr = 8'h12; reg_data = 8'h10; end
+            8'd2:  begin reg_addr = 8'h12; reg_data = RGB565_CONFIG ? 8'h14 : 8'h10; end
             8'd3:  begin reg_addr = 8'h0C; reg_data = 8'h04; end
             8'd4:  begin reg_addr = 8'h3E; reg_data = 8'h19; end
             8'd5:  begin reg_addr = 8'h40; reg_data = 8'hD0; end

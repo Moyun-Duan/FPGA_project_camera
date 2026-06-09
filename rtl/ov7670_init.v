@@ -1,7 +1,8 @@
 `timescale 1ns/1ps
 
 module ov7670_init #(
-    parameter POWERUP_DELAY = 24'd2_000_000
+    parameter POWERUP_DELAY = 24'd2_000_000,
+    parameter RGB565_CONFIG = 0
 ) (
     input  wire clk,
     input  wire reset,
@@ -22,7 +23,9 @@ module ov7670_init #(
     wire       master_busy;
     wire       master_done;
 
-    ov7670_config_rom u_rom (
+    ov7670_config_rom #(
+        .RGB565_CONFIG(RGB565_CONFIG)
+    ) u_rom (
         .index(rom_index),
         .reg_addr(reg_addr),
         .reg_data(reg_data),

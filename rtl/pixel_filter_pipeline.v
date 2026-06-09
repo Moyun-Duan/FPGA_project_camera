@@ -93,12 +93,30 @@ module pixel_filter_pipeline #(
             ((sharpen_up > 10'd255) ? 8'd255 : sharpen_up[7:0]) :
             sharpen_down[7:0];
 
+    function [7:0] cartoon_tone;
+        input [7:0] value;
+        begin
+            if (value < 8'd48)
+                cartoon_tone = 8'd40;
+            else if (value < 8'd96)
+                cartoon_tone = 8'd88;
+            else if (value < 8'd144)
+                cartoon_tone = 8'd136;
+            else if (value < 8'd192)
+                cartoon_tone = 8'd192;
+            else
+                cartoon_tone = 8'd240;
+        end
+    endfunction
+
     reg [7:0] gaussian_pixel_d;
     wire      sobel_soft_edge = (sobel_mag >= SOBEL_LOW_THRESHOLD);
-    wire [7:0] sobel_strength_pixel = sobel_soft_edge ? sobel_mag : 8'd0;
-    wire [7:0] sobel_overlay_pixel =
+    wire [7:0] sketch_edge_pixel =
         sobel_is_edge ? 8'd0 :
-        (sobel_soft_edge ? (gaussian_pixel_d >> 1) : gaussian_pixel_d);
+        (sobel_soft_edge ? 8'd160 : 8'd255);
+    wire [7:0] cartoon_pixel =
+        sobel_is_edge ? 8'd0 :
+        (sobel_soft_edge ? (cartoon_tone(gaussian_pixel_d) >> 1) : cartoon_tone(gaussian_pixel_d));
 
     always @(posedge clk) begin
         if (reset) begin
@@ -127,13 +145,13 @@ module pixel_filter_pipeline #(
                     out_valid <= sobel_valid;
                     out_x     <= sobel_x;
                     out_y     <= sobel_y;
-                    out_pixel <= sobel_strength_pixel;
+                    out_pixel <= sketch_edge_pixel;
                 end
                 default: begin
                     out_valid <= sobel_valid;
                     out_x     <= sobel_x;
                     out_y     <= sobel_y;
-                    out_pixel <= sobel_overlay_pixel;
+                    out_pixel <= cartoon_pixel;
                 end
             endcase
         end

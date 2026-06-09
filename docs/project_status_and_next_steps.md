@@ -18,18 +18,19 @@ fpga_vision_system/
 - 摄像头：OV7670。
 - 显示：VGA 640x480。
 - 内部处理分辨率：320x240，再以 2 倍最近邻方式输出到 VGA。
-- 功能链路：OV7670 RGB565 采集 -> 灰度转换 -> 3x3窗口 -> 高斯平滑/Sobel边缘 -> 帧缓存 -> VGA显示。
+- 功能链路：主顶层使用 OV7670 YUV422 采集并直接取 Y 亮度 -> 3x3窗口 -> 锐化/Sobel/漫画化 -> 帧缓存 -> VGA显示。
 - 模式选择：`mode_sw[1:0]`
-  - `00`：灰度图。
-  - `01`：高斯平滑灰度图。
-  - `10`：连续 Sobel 强度图。
-  - `11`：平滑灰度 + 黑色边缘叠加。
+  - `00`：直接 Y 通道灰度图。
+  - `01`：锐化灰度图。
+  - `10`：白底黑线草图。
+  - `11`：五级灰度漫画化 + 黑色轮廓线。
+- `style_page_sw` 仅保留端口兼容性，不启用第二显示页。
 
 当前主要 RTL：
 
 ```text
-rtl/vision_top.v              顶层集成
-rtl/ov7670_capture.v          OV7670 RGB565 字节采集
+rtl/vision_top.v              稳定 Y 通道灰度顶层集成
+rtl/ov7670_capture.v          OV7670 RGB565/YUV422 字节采集
 rtl/ov7670_init.v             OV7670 初始化控制
 rtl/sccb_master.v             SCCB/I2C写控制
 rtl/ov7670_config_rom.v       OV7670寄存器配置表
@@ -147,7 +148,7 @@ cd G:\files\work\Grade_1_latter_class\Digital_system\FPGA_project\fpga_vision_sy
 
 该脚本会检查：
 
-- OV7670 RGB565 双字节拼接和坐标计数。
+- OV7670 RGB565 双字节拼接、YUV 直接取 Y 和坐标计数。
 - 灰度/窗口/Sobel处理链路是否能对人工边缘产生响应。
 - 全部 RTL 文件是否能以 `vision_top` 为顶层完成编译检查。
 
@@ -267,7 +268,7 @@ wait_on_run impl_1
 
 1. 固化最终 XDC：把实际使用的 OV7670 接线、拨码开关、LED、VGA 引脚全部确认并保留。
 2. 固化最终 OV7670 寄存器配置：记录摄像头输出格式、分辨率、PCLK、HREF/VSYNC 极性。
-3. 固化最终演示模式：至少保证灰度、Sobel 强度图和边缘叠加图稳定。
+3. 固化最终演示模式：至少保证灰度、白底黑线草图和漫画化模式稳定。
 4. 调整 Sobel 低/高阈值：根据实际光照选择适合演示的 `SOBEL_LOW_THRESHOLD` 和 `SOBEL_THRESHOLD`。
 5. 补一个 VGA-only 测试或保留调试说明，便于答辩时解释排错流程。
 6. 用 Clocking Wizard/MMCM 替换简单分频，如果老师对时钟规范性要求较高。

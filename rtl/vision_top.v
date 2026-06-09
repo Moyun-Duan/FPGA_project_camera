@@ -4,6 +4,7 @@ module vision_top (
     input  wire        clk_100m,
     input  wire        reset_n,
     input  wire [1:0]  mode_sw,
+    input  wire        style_page_sw,
 
     input  wire        cam_pclk,
     input  wire        cam_vsync,
@@ -25,7 +26,8 @@ module vision_top (
     localparam IMG_WIDTH  = 320;
     localparam IMG_HEIGHT = 240;
     localparam ADDR_WIDTH = 17;
-    localparam CAMERA_FORMAT = 1;  // 0: RGB565, 1: YUV YUYV luma, 2: YUV UYVY luma
+    localparam FB_DEPTH   = IMG_WIDTH * IMG_HEIGHT;
+    localparam CAMERA_FORMAT = 1;  // YUV422, direct Y-luma capture for stable grayscale
 
     reg [1:0] clk_div;
     always @(posedge clk_100m or negedge reset_n) begin
@@ -72,7 +74,9 @@ module vision_top (
         end
     end
 
-    ov7670_init u_cam_init (
+    ov7670_init #(
+        .RGB565_CONFIG(1'b0)
+    ) u_cam_init (
         .clk(clk_100m),
         .reset(reset_sys),
         .sioc(cam_sioc),
@@ -89,7 +93,8 @@ module vision_top (
     ov7670_capture #(
         .WIDTH(IMG_WIDTH),
         .HEIGHT(IMG_HEIGHT),
-        .FORMAT(CAMERA_FORMAT)
+        .FORMAT(CAMERA_FORMAT),
+        .YUV_TO_RGB(1'b0)
     ) u_capture (
         .pclk(cam_pclk),
         .reset(reset_cam),
@@ -155,7 +160,8 @@ module vision_top (
 
     frame_buffer_gray #(
         .ADDR_WIDTH(ADDR_WIDTH),
-        .DATA_WIDTH(8)
+        .DATA_WIDTH(8),
+        .DEPTH(FB_DEPTH)
     ) u_frame_buffer (
         .wr_clk(cam_pclk),
         .wr_en(wr_en),

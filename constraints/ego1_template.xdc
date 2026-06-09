@@ -27,6 +27,11 @@ set_property PACKAGE_PIN R1 [get_ports {mode_sw[0]}]
 set_property PACKAGE_PIN N4 [get_ports {mode_sw[1]}]
 set_property IOSTANDARD LVCMOS33 [get_ports {mode_sw[*]}]
 
+## Compatibility switch. vision_top keeps this port for board compatibility,
+## but the final grayscale build does not use it for a second display page.
+set_property PACKAGE_PIN M4 [get_ports style_page_sw]
+set_property IOSTANDARD LVCMOS33 [get_ports style_page_sw]
+
 ## Camera configuration status LED, high lights D1_0.
 set_property PACKAGE_PIN K3 [get_ports camera_config_done]
 set_property IOSTANDARD LVCMOS33 [get_ports camera_config_done]

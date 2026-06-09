@@ -76,8 +76,8 @@ pix_clk 域：用于屏幕叠加模式标识
 |---|---|---|
 | `00` | 蓝色 | 灰度图 |
 | `01` | 绿色 | 锐化灰度图 |
-| `10` | 红色 | 连续 Sobel 强度图 |
-| `11` | 白色 | 平滑灰度 + 黑色边缘叠加 |
+| `10` | 红色 | 白底黑线草图 |
+| `11` | 白色 | 五级灰度漫画化 + 黑色轮廓线 |
 
 左上角还有 1 到 3 条竖条编码：
 
@@ -105,15 +105,15 @@ pix_clk 域：用于屏幕叠加模式标识
 ```text
 Sobel 高阈值默认 128
 Sobel 低阈值默认 48
-mode 10 输出连续 Sobel 强度图，低于低阈值的弱响应置黑
-mode 11 输出平滑灰度 + 黑色边缘叠加，保留场景上下文
+mode 10 输出白底黑线草图：强边缘为黑线，弱边缘为浅灰线，背景为白色
+mode 11 输出漫画化结果：先把平滑灰度量化成 5 个灰阶，再叠加黑色轮廓
 ```
 
 目的：
 
 ```text
-避免纯二值边缘图过硬、过黑或过白。
-用 mode 10 观察梯度强度，用 mode 11 观察边缘在原图中的位置。
+避免纯 Sobel 调试图过黑、过硬，不像 proposal 中的素描/漫画风。
+用灰阶分层表达明暗色块，用黑色轮廓表达线稿。
 ```
 
 ## 4. 重新生成 bitstream
@@ -224,6 +224,9 @@ rtl/ov7670_config_rom.v:
 
 rtl/vision_top.v:
   CAMERA_FORMAT = 1
+  YUV_TO_RGB = 0
+  yuv_byte_order = 1'b1
+  ov7670_init RGB565_CONFIG = 0
 
 rtl/ov7670_capture.v:
   FORMAT = 0: RGB565
@@ -231,7 +234,8 @@ rtl/ov7670_capture.v:
   FORMAT = 2: YUV UYVY，只取 Y 字节
 
 constraints/ego1_template.xdc:
-  SW2/SW3/SW4 调试输入已移除
+  SW2/M4 = style_page_sw，主 vision_top 中保留接口兼容但不启用第二显示页
+  SW3/SW4 调试输入已移除
 ```
 
 当前工程已固定实测较优配置：
@@ -252,22 +256,16 @@ cam_xclk = 25 MHz
 
 ## 8. 固定显示模式
 
-完整工程当前 `mode_sw[1:0]`：
+主顶层 `vision_top` 当前固定为稳定灰度/素描链路：
 
 ```text
 00: 原始灰度，作为判断采集质量的基准
 01: 3x3 锐化灰度
-10: 连续 Sobel 强度图，黑底亮边
-11: 平滑灰度 + 黑色边缘叠加
+10: 白底黑线草图
+11: 五级灰度漫画化 + 黑色轮廓线
 ```
 
-如果两种 YUV 格式都明显不对，再回退 RGB565：
-
-```verilog
-localparam CAMERA_FORMAT = 0;
-```
-
-并把 `rtl/ov7670_config_rom.v` 中 `COM7` 改回 RGB/QVGA 配置。
+`SW2/M4 style_page_sw` 在主顶层中只保留端口兼容性，不再切换彩色页。
 
 ## 9. 分辨率上限
 
