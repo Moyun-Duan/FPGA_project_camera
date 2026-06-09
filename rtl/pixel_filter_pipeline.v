@@ -54,9 +54,7 @@ module pixel_filter_pipeline #(
     wire [7:0] sobel_mag;
     wire       sobel_is_edge;
 
-    sobel_pipeline #(
-        .THRESHOLD(SOBEL_THRESHOLD)
-    ) u_sobel (
+    canny_pipeline u_sobel (
         .clk(clk),
         .reset(reset),
         .window_valid(win_valid),
