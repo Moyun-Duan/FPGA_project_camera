@@ -52,21 +52,30 @@ RGB565 color-format experiments.
 `style_page_sw` is kept in the port list for board compatibility, but the stable
 top no longer uses it to enable color output.
 
-`rtl/vision_rgb565_color_top.v` is an experimental color top. It configures the
-OV7670 for RGB565 and keeps the RGB333 color frame buffer isolated from
-`vision_top`. To try it in Vivado, set the top module to
+`rtl/vision_rgb565_color_top.v` is an isolated color top. It does not use the
+grayscale/Sobel processing pipeline from `vision_top`; it configures the camera
+for the same stable YUV422 stream used by `vision_top`, converts YUV to RGB565
+inside the color top, then stores those 16-bit color pixels in a color frame
+buffer for VGA output. To try it in Vivado, set the top module to
 `vision_rgb565_color_top`.
 
-On the RGB565 color top, `SW2=1` selects the color recognition/style page:
+On the color top, `SW2=0` selects the color-channel check page:
 
-- `00`: direct RGB565 color
-- `01`: direct RGB565 color with byte order swapped, for byte-order recognition
-- `10`: color pixel-cartoon style with 4x4 block sampling, tone bands, and dark Sobel outlines
-- `11`: anime-style color blocks with tone bands and dark Sobel outlines
+- `00`: standard UYVY-to-RGB color with boosted chroma
+- `01`: same image with U/V chroma bytes swapped
+- `10`: same image with red/green output channels swapped
+- `11`: same image with the V chroma direction inverted
 
-If `SW2=1, mode=01` is the correct color order on the real OV7670 module, set
-`RGB565_BYTE_SWAP` in `vision_rgb565_color_top.v` to `1'b1` so the stylized
-color modes use the swapped byte order too.
+`SW2=1` selects the color style page:
+
+- `00`: selected raw color
+- `01`: posterized color
+- `10`: pixel-cartoon style with 4x4 block sampling
+- `11`: anime-style color blocks
+
+After checking the color-channel page on real hardware, set `COLOR_UV_SWAP`,
+`COLOR_SWAP_RG`, `COLOR_INVERT_V`, or `COLOR_SWAP_RB` in
+`vision_rgb565_color_top.v` so the style page uses the correct interpretation.
 
 The internal processing resolution is 320x240. VGA output is 640x480, using 2x
 nearest-neighbor scaling from the processed frame buffer.

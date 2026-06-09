@@ -27,8 +27,15 @@ module vision_rgb565_color_top (
     localparam IMG_HEIGHT = 240;
     localparam ADDR_WIDTH = 17;
     localparam FB_DEPTH   = IMG_WIDTH * IMG_HEIGHT;
-    localparam CAMERA_FORMAT = 0;  // RGB565 camera output
-    localparam RGB565_BYTE_SWAP = 1'b0;  // Set to 1 if SW2=1/mode 01 has correct colors.
+    localparam CAMERA_FORMAT = 1;  // YUV422 camera output, converted to RGB565 in this color top.
+    localparam CAMERA_RGB565_CONFIG = 1'b0;
+    localparam COLOR_YUV_BYTE_ORDER = 1'b1;  // Matches the stable vision_top Y-luma phase.
+
+    // Set these after checking SW2=0/channel modes on real hardware.
+    localparam COLOR_UV_SWAP = 1'b0;
+    localparam COLOR_INVERT_V = 1'b0;
+    localparam COLOR_SWAP_RG = 1'b0;
+    localparam COLOR_SWAP_RB = 1'b0;
 
     reg [1:0] clk_div;
     always @(posedge clk_100m or negedge reset_n) begin
@@ -88,7 +95,7 @@ module vision_rgb565_color_top (
     end
 
     ov7670_init #(
-        .RGB565_CONFIG(1'b1)
+        .RGB565_CONFIG(CAMERA_RGB565_CONFIG)
     ) u_cam_init (
         .clk(clk_100m),
         .reset(reset_sys),
@@ -98,74 +105,189 @@ module vision_rgb565_color_top (
         .busy()
     );
 
-    wire        cap_valid;
-    wire [15:0] cap_rgb565;
-    wire [8:0]  cap_x;
-    wire [7:0]  cap_y;
+    function [7:0] clamp_u8;
+        input signed [17:0] value;
+        begin
+            if (value < 18'sd0)
+                clamp_u8 = 8'd0;
+            else if (value > 18'sd255)
+                clamp_u8 = 8'd255;
+            else
+                clamp_u8 = value[7:0];
+        end
+    endfunction
 
-    ov7670_capture #(
-        .WIDTH(IMG_WIDTH),
-        .HEIGHT(IMG_HEIGHT),
-        .FORMAT(CAMERA_FORMAT),
-        .YUV_TO_RGB(1'b0)
-    ) u_capture (
-        .pclk(cam_pclk),
-        .reset(reset_cam),
-        .vsync(cam_vsync),
-        .href(cam_href),
-        .data(cam_data),
-        .yuv_byte_order(1'b0),
-        .pixel_valid(cap_valid),
-        .rgb565(cap_rgb565),
-        .pixel_x(cap_x),
-        .pixel_y(cap_y),
-        .frame_start()
-    );
+    function [15:0] yuv_to_rgb565_local;
+        input [7:0] y;
+        input [7:0] u_in;
+        input [7:0] v_in;
+        input       uv_swap;
+        input       invert_v;
+        input       swap_rg;
+        input       swap_rb;
+        reg [7:0] u_sel;
+        reg [7:0] v_sel;
+        reg signed [17:0] yy;
+        reg signed [17:0] uu;
+        reg signed [17:0] vv;
+        reg signed [17:0] rr_calc;
+        reg signed [17:0] gg_calc;
+        reg signed [17:0] bb_calc;
+        reg [7:0] r8;
+        reg [7:0] g8;
+        reg [7:0] b8;
+        reg [7:0] tmp8;
+        begin
+            u_sel = uv_swap ? v_in : u_in;
+            v_sel = uv_swap ? u_in : v_in;
+            if (invert_v)
+                v_sel = 8'd255 - v_sel;
 
-    wire        filt_valid;
-    wire [8:0]  filt_x;
-    wire [7:0]  filt_y;
-    wire [7:0]  filt_pixel;
-    wire        color_byte_test_cam = style_page_cam && (mode_cam == 2'b01);
-    wire        color_style_cam = style_page_cam && mode_cam[1];
-    wire        byte_swap_cam = color_byte_test_cam || (color_style_cam && RGB565_BYTE_SWAP);
-    wire [15:0] cap_rgb565_swap = {cap_rgb565[7:0], cap_rgb565[15:8]};
-    wire [15:0] cap_rgb565_debug = byte_swap_cam ? cap_rgb565_swap : cap_rgb565;
-    wire [1:0]  filter_mode_cam = style_page_cam ? (mode_cam[1] ? 2'b10 : 2'b00) : mode_cam;
+            yy = $signed({10'd0, y});
+            uu = ($signed({10'd0, u_sel}) - 18'sd128);
+            vv = ($signed({10'd0, v_sel}) - 18'sd128);
 
-    pixel_filter_pipeline #(
-        .WIDTH(IMG_WIDTH),
-        .HEIGHT(IMG_HEIGHT),
-        .SOBEL_LOW_THRESHOLD(8'd48),
-        .SOBEL_THRESHOLD(8'd128)
-    ) u_filter (
-        .clk(cam_pclk),
-        .reset(reset_cam),
-        .mode(filter_mode_cam),
-        .enhance_enable(1'b1),
-        .pixel_valid(cap_valid),
-        .rgb565(cap_rgb565_debug),
-        .pixel_x(cap_x),
-        .pixel_y(cap_y),
-        .out_valid(filt_valid),
-        .out_x(filt_x),
-        .out_y(filt_y),
-        .out_pixel(filt_pixel)
-    );
+            // Boost chroma by 1.5x so the VGA output is visibly colored.
+            uu = uu + (uu >>> 1);
+            vv = vv + (vv >>> 1);
 
-    wire [ADDR_WIDTH-1:0] wr_addr = (filt_y * IMG_WIDTH) + filt_x;
-    wire                  wr_en   = filt_valid &&
-                                    (filt_x < IMG_WIDTH[8:0]) &&
-                                    (filt_y < IMG_HEIGHT[7:0]);
-    wire [ADDR_WIDTH-1:0] color_wr_addr = (cap_y * IMG_WIDTH) + cap_x;
-    wire                  color_wr_en   = cap_valid &&
-                                          (cap_x < IMG_WIDTH[8:0]) &&
-                                          (cap_y < IMG_HEIGHT[7:0]);
-    wire [8:0] cap_rgb333 = {
-        cap_rgb565_debug[15:13],
-        cap_rgb565_debug[10:8],
-        cap_rgb565_debug[4:2]
-    };
+            rr_calc = yy + ((18'sd90 * vv) >>> 6);
+            gg_calc = yy - (((18'sd22 * uu) + (18'sd46 * vv)) >>> 6);
+            bb_calc = yy + ((18'sd113 * uu) >>> 6);
+
+            r8 = clamp_u8(rr_calc);
+            g8 = clamp_u8(gg_calc);
+            b8 = clamp_u8(bb_calc);
+
+            if (swap_rg) begin
+                tmp8 = r8;
+                r8 = g8;
+                g8 = tmp8;
+            end
+            if (swap_rb) begin
+                tmp8 = r8;
+                r8 = b8;
+                b8 = tmp8;
+            end
+
+            yuv_to_rgb565_local = {r8[7:3], g8[7:2], b8[7:3]};
+        end
+    endfunction
+
+    wire debug_uv_swap = (!style_page_cam) && (mode_cam == 2'b01);
+    wire debug_swap_rg = (!style_page_cam) && (mode_cam == 2'b10);
+    wire debug_invert_v = (!style_page_cam) && (mode_cam == 2'b11);
+    wire use_uv_swap = style_page_cam ? COLOR_UV_SWAP : debug_uv_swap;
+    wire use_invert_v = style_page_cam ? COLOR_INVERT_V : debug_invert_v;
+    wire use_swap_rg = style_page_cam ? COLOR_SWAP_RG : debug_swap_rg;
+
+    reg        cap_valid;
+    reg [15:0] cap_rgb565;
+    reg [8:0]  cap_x;
+    reg [7:0]  cap_y;
+    reg        href_d;
+    reg [1:0]  yuv_phase;
+    reg [7:0]  y0_byte;
+    reg [7:0]  u_byte;
+    reg [7:0]  v_byte;
+    reg        row_seen;
+
+    always @(posedge cam_pclk) begin
+        if (reset_cam) begin
+            cap_valid <= 1'b0;
+            cap_rgb565 <= 16'd0;
+            cap_x <= 9'd0;
+            cap_y <= 8'd0;
+            href_d <= 1'b0;
+            yuv_phase <= 2'd0;
+            y0_byte <= 8'd0;
+            u_byte <= 8'd128;
+            v_byte <= 8'd128;
+            row_seen <= 1'b0;
+        end else begin
+            href_d <= cam_href;
+            cap_valid <= 1'b0;
+
+            if (cam_vsync) begin
+                cap_x <= 9'd0;
+                cap_y <= 8'd0;
+                yuv_phase <= 2'd0;
+                row_seen <= 1'b0;
+            end else if (cam_href) begin
+                row_seen <= 1'b1;
+                if (!href_d) begin
+                    cap_x <= 9'd0;
+                    yuv_phase <= 2'd0;
+                end
+
+                case (yuv_phase)
+                    2'd0: begin
+                        if (COLOR_YUV_BYTE_ORDER)
+                            u_byte <= cam_data;
+                        else
+                            y0_byte <= cam_data;
+                    end
+                    2'd1: begin
+                        if (COLOR_YUV_BYTE_ORDER)
+                            y0_byte <= cam_data;
+                        else
+                            u_byte <= cam_data;
+                    end
+                    2'd2: begin
+                        if (COLOR_YUV_BYTE_ORDER) begin
+                            v_byte <= cam_data;
+                            if (cap_x < IMG_WIDTH[8:0] && cap_y < IMG_HEIGHT[7:0]) begin
+                                cap_rgb565 <= yuv_to_rgb565_local(
+                                    y0_byte, u_byte, cam_data,
+                                    use_uv_swap, use_invert_v, use_swap_rg, COLOR_SWAP_RB
+                                );
+                                cap_valid <= 1'b1;
+                            end
+                        end else begin
+                            v_byte <= cam_data;
+                        end
+                        if (COLOR_YUV_BYTE_ORDER && cap_x < (IMG_WIDTH - 1))
+                            cap_x <= cap_x + 1'b1;
+                    end
+                    default: begin
+                        if (COLOR_YUV_BYTE_ORDER) begin
+                            if (cap_x < IMG_WIDTH[8:0] && cap_y < IMG_HEIGHT[7:0]) begin
+                                cap_rgb565 <= yuv_to_rgb565_local(
+                                    cam_data, u_byte, v_byte,
+                                    use_uv_swap, use_invert_v, use_swap_rg, COLOR_SWAP_RB
+                                );
+                                cap_valid <= 1'b1;
+                            end
+                        end else begin
+                            if (cap_x < IMG_WIDTH[8:0] && cap_y < IMG_HEIGHT[7:0]) begin
+                                cap_rgb565 <= yuv_to_rgb565_local(
+                                    y0_byte, u_byte, v_byte,
+                                    use_uv_swap, use_invert_v, use_swap_rg, COLOR_SWAP_RB
+                                );
+                                cap_valid <= 1'b1;
+                            end
+                        end
+                        if (cap_x < (IMG_WIDTH - 1))
+                            cap_x <= cap_x + 1'b1;
+                    end
+                endcase
+
+                yuv_phase <= yuv_phase + 1'b1;
+            end else begin
+                yuv_phase <= 2'd0;
+                if (href_d && row_seen) begin
+                    row_seen <= 1'b0;
+                    if (cap_y < (IMG_HEIGHT - 1))
+                        cap_y <= cap_y + 1'b1;
+                end
+            end
+        end
+    end
+
+    wire [ADDR_WIDTH-1:0] wr_addr = (cap_y * IMG_WIDTH) + cap_x;
+    wire                  wr_en   = cap_valid &&
+                                    (cap_x < IMG_WIDTH[8:0]) &&
+                                    (cap_y < IMG_HEIGHT[7:0]);
 
     wire        vga_active;
     wire [9:0]  vga_x;
@@ -183,43 +305,24 @@ module vision_rgb565_color_top (
 
     wire [8:0] src_x = vga_x[9:1];
     wire [7:0] src_y = vga_y[8:1];
-    wire       color_page = style_page_pix;
-    wire       color_raw_mode = color_page && (mode_pix == 2'b00);
-    wire       color_byte_test_mode = color_page && (mode_pix == 2'b01);
-    wire       color_pixel_mode = color_page && (mode_pix == 2'b10);
-    wire       color_anime_mode = color_page && (mode_pix == 2'b11);
-    wire [8:0] rd_src_x = color_pixel_mode ? {src_x[8:2], 2'b00} : src_x;
-    wire [7:0] rd_src_y = color_pixel_mode ? {src_y[7:2], 2'b00} : src_y;
+    wire       style_pixel_mode = style_page_pix && (mode_pix == 2'b10);
+    wire [8:0] rd_src_x = style_pixel_mode ? {src_x[8:2], 2'b00} : src_x;
+    wire [7:0] rd_src_y = style_pixel_mode ? {src_y[7:2], 2'b00} : src_y;
     wire [ADDR_WIDTH-1:0] rd_addr = (rd_src_y * IMG_WIDTH) + rd_src_x;
-    wire [7:0] fb_pixel;
-    wire [8:0] fb_rgb333;
+    wire [15:0] fb_rgb565;
 
     frame_buffer_gray #(
         .ADDR_WIDTH(ADDR_WIDTH),
-        .DATA_WIDTH(8),
-        .DEPTH(FB_DEPTH)
-    ) u_frame_buffer (
-        .wr_clk(cam_pclk),
-        .wr_en(wr_en),
-        .wr_addr(wr_addr),
-        .wr_data(filt_pixel),
-        .rd_clk(pix_clk),
-        .rd_addr(rd_addr),
-        .rd_data(fb_pixel)
-    );
-
-    frame_buffer_gray #(
-        .ADDR_WIDTH(ADDR_WIDTH),
-        .DATA_WIDTH(9),
+        .DATA_WIDTH(16),
         .DEPTH(FB_DEPTH)
     ) u_color_frame_buffer (
         .wr_clk(cam_pclk),
-        .wr_en(color_wr_en),
-        .wr_addr(color_wr_addr),
-        .wr_data(cap_rgb333),
+        .wr_en(wr_en),
+        .wr_addr(wr_addr),
+        .wr_data(cap_rgb565),
         .rd_clk(pix_clk),
         .rd_addr(rd_addr),
-        .rd_data(fb_rgb333)
+        .rd_data(fb_rgb565)
     );
 
     reg active_d;
@@ -237,21 +340,19 @@ module vision_rgb565_color_top (
         end
     end
 
-    reg [3:0] dither_threshold;
-    always @* begin
-        case ({vga_y_d[0], vga_x_d[0]})
-            2'b00: dither_threshold = 4'd0;
-            2'b01: dither_threshold = 4'd8;
-            2'b10: dither_threshold = 4'd12;
-            default: dither_threshold = 4'd4;
-        endcase
-    end
-
-    wire dither_add = active_d &&
-                      (fb_pixel[7:4] != 4'hf) &&
-                      (fb_pixel[3:0] > dither_threshold);
-    wire [3:0] gray4 = active_d ? (fb_pixel[7:4] + {3'b000, dither_add}) : 4'd0;
-    wire [11:0] base_rgb = {gray4, gray4, gray4};
+    function [11:0] rgb565_to_rgb444;
+        input [15:0] value;
+        input        swap_rb;
+        reg [3:0] red4;
+        reg [3:0] green4;
+        reg [3:0] blue4;
+        begin
+            red4   = value[15:12];
+            green4 = value[10:7];
+            blue4  = value[4:1];
+            rgb565_to_rgb444 = swap_rb ? {blue4, green4, red4} : {red4, green4, blue4};
+        end
+    endfunction
 
     function [3:0] posterize4;
         input [3:0] value;
@@ -283,56 +384,65 @@ module vision_rgb565_color_top (
         end
     endfunction
 
-    function [3:0] darken4;
-        input [3:0] value;
-        begin
-            darken4 = value >> 1;
-        end
-    endfunction
+    wire [11:0] rgb_selected = rgb565_to_rgb444(fb_rgb565, COLOR_SWAP_RB);
+    wire [11:0] rgb_swap_rb = rgb565_to_rgb444(fb_rgb565, ~COLOR_SWAP_RB);
+    wire [11:0] rgb_boost = {
+        rgb_selected[11:8] | (rgb_selected[11:8] >> 1),
+        rgb_selected[7:4]  | (rgb_selected[7:4] >> 1),
+        rgb_selected[3:0]  | (rgb_selected[3:0] >> 1)
+    };
 
-    wire [11:0] color_raw_rgb = {
-        fb_rgb333[8:6], fb_rgb333[8],
-        fb_rgb333[5:3], fb_rgb333[5],
-        fb_rgb333[2:0], fb_rgb333[2]
+    wire [11:0] poster_rgb = {
+        posterize4(rgb_selected[11:8]),
+        posterize4(rgb_selected[7:4]),
+        posterize4(rgb_selected[3:0])
     };
-    wire [11:0] color_poster_rgb = {
-        posterize4(color_raw_rgb[11:8]),
-        posterize4(color_raw_rgb[7:4]),
-        posterize4(color_raw_rgb[3:0])
+    wire [11:0] anime_base_rgb = {
+        anime_tone4(rgb_selected[11:8]),
+        anime_tone4(rgb_selected[7:4]),
+        anime_tone4(rgb_selected[3:0])
     };
-    wire [11:0] color_anime_base = {
-        anime_tone4(color_raw_rgb[11:8]),
-        anime_tone4(color_raw_rgb[7:4]),
-        anime_tone4(color_raw_rgb[3:0])
-    };
-    wire color_edge_hard = (color_pixel_mode || color_anime_mode) && (fb_pixel < 8'd32);
-    wire color_edge_soft = (color_pixel_mode || color_anime_mode) && (fb_pixel < 8'd200);
-    wire [11:0] color_pixel_rgb =
-        color_edge_hard ? 12'h000 :
-        color_edge_soft ? {
-            darken4(color_poster_rgb[11:8]),
-            darken4(color_poster_rgb[7:4]),
-            darken4(color_poster_rgb[3:0])
-        } : color_poster_rgb;
-    wire [11:0] color_anime_rgb =
-        color_edge_hard ? 12'h000 :
-        color_edge_soft ? {
-            darken4(color_anime_base[11:8]),
-            darken4(color_anime_base[7:4]),
-            darken4(color_anime_base[3:0])
-        } : color_anime_base;
-    wire [11:0] image_rgb =
-        (color_raw_mode || color_byte_test_mode) ? color_raw_rgb :
-        color_pixel_mode ? color_pixel_rgb :
-        color_anime_mode ? color_anime_rgb : base_rgb;
+    wire [5:0] anime_sum = {2'b00, rgb_selected[11:8]} +
+                           {2'b00, rgb_selected[7:4]} +
+                           {2'b00, rgb_selected[3:0]};
+    wire [11:0] anime_rgb = (anime_sum < 6'd8) ? 12'h000 : anime_base_rgb;
+
+    reg [11:0] debug_rgb;
+    always @* begin
+        case (mode_pix)
+            2'b00: debug_rgb = rgb_selected;
+            2'b01: debug_rgb = rgb_swap_rb;
+            2'b10: debug_rgb = rgb_boost;
+            default: begin
+                if (vga_y_d < 10'd240)
+                    debug_rgb = (vga_x_d < 10'd320) ? rgb_selected : rgb_swap_rb;
+                else
+                    debug_rgb = (vga_x_d < 10'd320) ? poster_rgb : anime_rgb;
+            end
+        endcase
+    end
+
+    reg [11:0] style_rgb;
+    always @* begin
+        case (mode_pix)
+            2'b00: style_rgb = rgb_selected;
+            2'b01: style_rgb = poster_rgb;
+            2'b10: style_rgb = poster_rgb;
+            default: style_rgb = anime_rgb;
+        endcase
+    end
 
     reg [11:0] mode_rgb;
     always @* begin
-        case (mode_pix)
-            2'b00: mode_rgb = 12'h00f;
-            2'b01: mode_rgb = 12'h0f0;
-            2'b10: mode_rgb = 12'hf00;
-            default: mode_rgb = 12'hfff;
+        case ({style_page_pix, mode_pix})
+            3'b000: mode_rgb = 12'h00f;
+            3'b001: mode_rgb = 12'h0f0;
+            3'b010: mode_rgb = 12'hf00;
+            3'b011: mode_rgb = 12'hff0;
+            3'b100: mode_rgb = 12'h0ff;
+            3'b101: mode_rgb = 12'hf0f;
+            3'b110: mode_rgb = 12'hfff;
+            default: mode_rgb = 12'hfa0;
         endcase
     end
 
@@ -345,7 +455,8 @@ module vision_rgb565_color_top (
                   ((vga_x_d < 10'd4) || (vga_x_d >= 10'd636) ||
                    (vga_y_d < 10'd4) || (vga_y_d >= 10'd476));
 
-    wire [11:0] out_rgb = (mode_mark || border) ? mode_rgb : image_rgb;
+    wire [11:0] image_rgb = style_page_pix ? style_rgb : debug_rgb;
+    wire [11:0] out_rgb = active_d ? ((mode_mark || border) ? mode_rgb : image_rgb) : 12'h000;
 
     assign vga_r = out_rgb[11:8];
     assign vga_g = out_rgb[7:4];
