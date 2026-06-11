@@ -1,8 +1,8 @@
 `timescale 1ns/1ps
 
 module canny_pipeline #(
-    parameter LOW_THRESHOLD  = 8'd48,
-    parameter HIGH_THRESHOLD = 8'd128
+    parameter LOW_THRESHOLD  = 8'd24,
+    parameter HIGH_THRESHOLD = 8'd64
 ) (
     input  wire       clk,
     input  wire       reset,
@@ -36,8 +36,7 @@ module canny_pipeline #(
     reg [7:0]  y_s3;
     reg [12:0] mag_sum_s3;
 
-    wire [10:0] mag_scaled  = mag_sum_s3[12:2];
-    wire [7:0]  mag_clamped = (mag_scaled > 11'd255) ? 8'hff : mag_scaled[7:0];
+    wire [7:0] mag_clamped = (mag_sum_s3 > 13'd255) ? 8'hff : mag_sum_s3[7:0];
 
     always @(posedge clk) begin
         if (reset) begin

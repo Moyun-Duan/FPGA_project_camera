@@ -29,6 +29,7 @@ module vision_top (
     localparam FB_DEPTH   = IMG_WIDTH * IMG_HEIGHT;
     localparam CAMERA_FORMAT = 1;  // YUV422, direct Y-luma capture for stable grayscale
     localparam CAMERA_LUMA_OUTPUT = 1;
+    localparam RED_EDGE_EXPERIMENT = 0;
 
     reg [1:0] clk_div;
     always @(posedge clk_100m or negedge reset_n) begin
@@ -121,8 +122,14 @@ module vision_top (
         .WIDTH(IMG_WIDTH),
         .HEIGHT(IMG_HEIGHT),
         .INPUT_LUMA(CAMERA_LUMA_OUTPUT),
-        .SOBEL_LOW_THRESHOLD(8'd48),
-        .SOBEL_THRESHOLD(8'd128)
+        .SOBEL_LOW_THRESHOLD(8'd24),
+        .SOBEL_THRESHOLD(8'd64),
+        .IMPULSE_DELTA(8'd40),
+        .EDGE_STRONG_MIN_SUPPORT(4'd5),
+        .EDGE_SOFT_MIN_SUPPORT(4'd6),
+        .EDGE_FINAL_STRONG_MIN_SUPPORT(4'd5),
+        .EDGE_FINAL_SOFT_MIN_SUPPORT(4'd6),
+        .RED_EDGE_ENABLE(RED_EDGE_EXPERIMENT)
     ) u_filter (
         .clk(cam_pclk),
         .reset(reset_cam),
@@ -161,22 +168,20 @@ module vision_top (
     wire [8:0] src_x = vga_x[9:1];
     wire [7:0] src_y = vga_y[8:1];
     wire [ADDR_WIDTH-1:0] rd_addr = (src_y * IMG_WIDTH) + src_x;
-    wire [8:0] fb_data;
-    wire       fb_red_edge = fb_data[8];
-    wire [7:0] fb_pixel    = fb_data[7:0];
+    wire [7:0] fb_pixel;
 
     frame_buffer_gray #(
         .ADDR_WIDTH(ADDR_WIDTH),
-        .DATA_WIDTH(9),
+        .DATA_WIDTH(8),
         .DEPTH(FB_DEPTH)
     ) u_frame_buffer (
         .wr_clk(cam_pclk),
         .wr_en(wr_en),
         .wr_addr(wr_addr),
-        .wr_data({filt_red_edge, filt_pixel}),
+        .wr_data(filt_pixel),
         .rd_clk(pix_clk),
         .rd_addr(rd_addr),
-        .rd_data(fb_data)
+        .rd_data(fb_pixel)
     );
 
     reg active_d;
@@ -229,9 +234,7 @@ module vision_top (
                   ((vga_x_d < 10'd4) || (vga_x_d >= 10'd636) ||
                    (vga_y_d < 10'd4) || (vga_y_d >= 10'd476));
 
-    wire red_edge_overlay = active_d && (mode_pix == 2'b10) && fb_red_edge;
-    wire [11:0] out_rgb = (mode_mark || border) ? mode_rgb :
-                           (red_edge_overlay ? 12'hf00 : base_rgb);
+    wire [11:0] out_rgb = (mode_mark || border) ? mode_rgb : base_rgb;
 
     assign vga_r = out_rgb[11:8];
     assign vga_g = out_rgb[7:4];

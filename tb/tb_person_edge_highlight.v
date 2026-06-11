@@ -25,6 +25,7 @@ module tb_person_edge_highlight;
     pixel_filter_pipeline #(
         .WIDTH(16),
         .HEIGHT(16),
+        .RED_EDGE_ENABLE(1),
         .PERSON_MIN_EDGES(16'd8),
         .PERSON_MIN_WIDTH(9'd2),
         .PERSON_MIN_HEIGHT(8'd6),
