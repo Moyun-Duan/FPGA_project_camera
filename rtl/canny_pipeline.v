@@ -1,6 +1,9 @@
 `timescale 1ns/1ps
 
-module canny_pipeline (
+module canny_pipeline #(
+    parameter LOW_THRESHOLD  = 8'd48,
+    parameter HIGH_THRESHOLD = 8'd128
+) (
     input  wire       clk,
     input  wire       reset,
     input  wire       window_valid,
@@ -16,147 +19,82 @@ module canny_pipeline (
     output reg [7:0]  magnitude,
     output reg        is_edge
 );
+    reg        valid_s1;
+    reg [8:0]  x_s1;
+    reg [7:0]  y_s1;
+    reg signed [11:0] gx_s1;
+    reg signed [11:0] gy_s1;
 
-    //--------------------------------------------------
-    // 坐标同步
-    //--------------------------------------------------
+    reg        valid_s2;
+    reg [8:0]  x_s2;
+    reg [7:0]  y_s2;
+    reg [11:0] abs_gx_s2;
+    reg [11:0] abs_gy_s2;
 
-    reg        valid_d1;
-    reg [8:0]  x_d1;
-    reg [7:0]  y_d1;
+    reg        valid_s3;
+    reg [8:0]  x_s3;
+    reg [7:0]  y_s3;
+    reg [12:0] mag_sum_s3;
 
-    always @(posedge clk) begin
-        if(reset) begin
-            valid_d1 <= 1'b0;
-            x_d1 <= 9'd0;
-            y_d1 <= 8'd0;
-        end
-        else begin
-            valid_d1 <= window_valid;
-            x_d1 <= window_x;
-            y_d1 <= window_y;
-        end
-    end
-
-    //--------------------------------------------------
-    // Sobel
-    //--------------------------------------------------
-
-    reg signed [11:0] gx;
-    reg signed [11:0] gy;
-
-    reg [11:0] abs_gx;
-    reg [11:0] abs_gy;
-
-    reg [12:0] mag_sum;
+    wire [10:0] mag_scaled  = mag_sum_s3[12:2];
+    wire [7:0]  mag_clamped = (mag_scaled > 11'd255) ? 8'hff : mag_scaled[7:0];
 
     always @(posedge clk) begin
-
-        if(reset) begin
-
-            gx <= 0;
-            gy <= 0;
-
-            abs_gx <= 0;
-            abs_gy <= 0;
-
-            mag_sum <= 0;
-
-        end
-        else begin
-
-            gx <=
-                -$signed({4'd0,p00})
-                +$signed({4'd0,p02})
-                -($signed({4'd0,p10}) <<< 1)
-                +($signed({4'd0,p12}) <<< 1)
-                -$signed({4'd0,p20})
-                +$signed({4'd0,p22});
-
-            gy <=
-                 $signed({4'd0,p00})
-                +($signed({4'd0,p01}) <<< 1)
-                + $signed({4'd0,p02})
-                - $signed({4'd0,p20})
-                -($signed({4'd0,p21}) <<< 1)
-                - $signed({4'd0,p22});
-
-            abs_gx <= gx[11] ? (-gx) : gx;
-            abs_gy <= gy[11] ? (-gy) : gy;
-
-            mag_sum <= abs_gx + abs_gy;
-
-        end
-    end
-
-    //--------------------------------------------------
-    // 输出梯度幅值
-    //--------------------------------------------------
-
-    reg [7:0] mag_out;
-
-    always @(posedge clk) begin
-
-        if(reset)
-            mag_out <= 8'd0;
-
-        else begin
-
-            if(mag_sum > 13'd255)
-                mag_out <= 8'hFF;
-            else
-                mag_out <= mag_sum[7:0];
-
-        end
-
-    end
-
-    //--------------------------------------------------
-    // 阈值判断
-    //--------------------------------------------------
-    // 可以调整这个参数
-    //--------------------------------------------------
-
-    localparam EDGE_THRESHOLD = 13'd180;
-
-    reg edge_flag;
-
-    always @(posedge clk) begin
-
-        if(reset)
-            edge_flag <= 1'b0;
-        else
-            edge_flag <= (mag_sum > EDGE_THRESHOLD);
-
-    end
-
-    //--------------------------------------------------
-    // 输出
-    //--------------------------------------------------
-
-    always @(posedge clk) begin
-
-        if(reset) begin
-
+        if (reset) begin
+            valid_s1   <= 1'b0;
+            x_s1       <= 9'd0;
+            y_s1       <= 8'd0;
+            gx_s1      <= 12'sd0;
+            gy_s1      <= 12'sd0;
+            valid_s2   <= 1'b0;
+            x_s2       <= 9'd0;
+            y_s2       <= 8'd0;
+            abs_gx_s2  <= 12'd0;
+            abs_gy_s2  <= 12'd0;
+            valid_s3   <= 1'b0;
+            x_s3       <= 9'd0;
+            y_s3       <= 8'd0;
+            mag_sum_s3 <= 13'd0;
             out_valid  <= 1'b0;
             out_x      <= 9'd0;
             out_y      <= 8'd0;
-
             magnitude  <= 8'd0;
             is_edge    <= 1'b0;
+        end else begin
+            valid_s1 <= window_valid;
+            x_s1     <= window_x;
+            y_s1     <= window_y;
+            gx_s1    <=
+                -$signed({4'd0, p00})
+                +$signed({4'd0, p02})
+                -($signed({4'd0, p10}) <<< 1)
+                +($signed({4'd0, p12}) <<< 1)
+                -$signed({4'd0, p20})
+                +$signed({4'd0, p22});
+            gy_s1    <=
+                 $signed({4'd0, p00})
+                +($signed({4'd0, p01}) <<< 1)
+                + $signed({4'd0, p02})
+                - $signed({4'd0, p20})
+                -($signed({4'd0, p21}) <<< 1)
+                - $signed({4'd0, p22});
 
+            valid_s2  <= valid_s1;
+            x_s2      <= x_s1;
+            y_s2      <= y_s1;
+            abs_gx_s2 <= gx_s1[11] ? -gx_s1 : gx_s1;
+            abs_gy_s2 <= gy_s1[11] ? -gy_s1 : gy_s1;
+
+            valid_s3   <= valid_s2;
+            x_s3       <= x_s2;
+            y_s3       <= y_s2;
+            mag_sum_s3 <= {1'b0, abs_gx_s2} + {1'b0, abs_gy_s2};
+
+            out_valid <= valid_s3;
+            out_x     <= x_s3;
+            out_y     <= y_s3;
+            magnitude <= mag_clamped;
+            is_edge   <= (mag_clamped >= HIGH_THRESHOLD);
         end
-        else begin
-
-            out_valid  <= valid_d1;
-            out_x      <= x_d1;
-            out_y      <= y_d1;
-
-            magnitude  <= mag_out;
-            is_edge    <= edge_flag;
-
-        end
-
     end
-
 endmodule

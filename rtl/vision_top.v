@@ -28,6 +28,7 @@ module vision_top (
     localparam ADDR_WIDTH = 17;
     localparam FB_DEPTH   = IMG_WIDTH * IMG_HEIGHT;
     localparam CAMERA_FORMAT = 1;  // YUV422, direct Y-luma capture for stable grayscale
+    localparam CAMERA_LUMA_OUTPUT = 1;
 
     reg [1:0] clk_div;
     always @(posedge clk_100m or negedge reset_n) begin
@@ -94,7 +95,8 @@ module vision_top (
         .WIDTH(IMG_WIDTH),
         .HEIGHT(IMG_HEIGHT),
         .FORMAT(CAMERA_FORMAT),
-        .YUV_TO_RGB(1'b0)
+        .YUV_TO_RGB(1'b0),
+        .LUMA_OUTPUT(CAMERA_LUMA_OUTPUT)
     ) u_capture (
         .pclk(cam_pclk),
         .reset(reset_cam),
@@ -113,10 +115,12 @@ module vision_top (
     wire [8:0]  filt_x;
     wire [7:0]  filt_y;
     wire [7:0]  filt_pixel;
+    wire        filt_red_edge;
 
     pixel_filter_pipeline #(
         .WIDTH(IMG_WIDTH),
         .HEIGHT(IMG_HEIGHT),
+        .INPUT_LUMA(CAMERA_LUMA_OUTPUT),
         .SOBEL_LOW_THRESHOLD(8'd48),
         .SOBEL_THRESHOLD(8'd128)
     ) u_filter (
@@ -131,7 +135,8 @@ module vision_top (
         .out_valid(filt_valid),
         .out_x(filt_x),
         .out_y(filt_y),
-        .out_pixel(filt_pixel)
+        .out_pixel(filt_pixel),
+        .out_red_edge(filt_red_edge)
     );
 
     wire [ADDR_WIDTH-1:0] wr_addr = (filt_y * IMG_WIDTH) + filt_x;
@@ -156,20 +161,22 @@ module vision_top (
     wire [8:0] src_x = vga_x[9:1];
     wire [7:0] src_y = vga_y[8:1];
     wire [ADDR_WIDTH-1:0] rd_addr = (src_y * IMG_WIDTH) + src_x;
-    wire [7:0] fb_pixel;
+    wire [8:0] fb_data;
+    wire       fb_red_edge = fb_data[8];
+    wire [7:0] fb_pixel    = fb_data[7:0];
 
     frame_buffer_gray #(
         .ADDR_WIDTH(ADDR_WIDTH),
-        .DATA_WIDTH(8),
+        .DATA_WIDTH(9),
         .DEPTH(FB_DEPTH)
     ) u_frame_buffer (
         .wr_clk(cam_pclk),
         .wr_en(wr_en),
         .wr_addr(wr_addr),
-        .wr_data(filt_pixel),
+        .wr_data({filt_red_edge, filt_pixel}),
         .rd_clk(pix_clk),
         .rd_addr(rd_addr),
-        .rd_data(fb_pixel)
+        .rd_data(fb_data)
     );
 
     reg active_d;
@@ -222,7 +229,9 @@ module vision_top (
                   ((vga_x_d < 10'd4) || (vga_x_d >= 10'd636) ||
                    (vga_y_d < 10'd4) || (vga_y_d >= 10'd476));
 
-    wire [11:0] out_rgb = (mode_mark || border) ? mode_rgb : base_rgb;
+    wire red_edge_overlay = active_d && (mode_pix == 2'b10) && fb_red_edge;
+    wire [11:0] out_rgb = (mode_mark || border) ? mode_rgb :
+                           (red_edge_overlay ? 12'hf00 : base_rgb);
 
     assign vga_r = out_rgb[11:8];
     assign vga_g = out_rgb[7:4];

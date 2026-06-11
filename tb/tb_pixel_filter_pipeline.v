@@ -14,11 +14,13 @@ module tb_pixel_filter_pipeline;
     wire [8:0] out_x;
     wire [7:0] out_y;
     wire [7:0] out_pixel;
+    wire out_red_edge;
 
     integer x;
     integer y;
     integer dark_edge_count;
     integer bright_background_count;
+    integer red_edge_count;
 
     always #5 clk = ~clk;
 
@@ -37,7 +39,8 @@ module tb_pixel_filter_pipeline;
         .out_valid(out_valid),
         .out_x(out_x),
         .out_y(out_y),
-        .out_pixel(out_pixel)
+        .out_pixel(out_pixel),
+        .out_red_edge(out_red_edge)
     );
 
     always @(posedge clk) begin
@@ -45,11 +48,14 @@ module tb_pixel_filter_pipeline;
             dark_edge_count <= dark_edge_count + 1;
         if (out_valid && out_pixel > 8'd200)
             bright_background_count <= bright_background_count + 1;
+        if (out_valid && out_red_edge)
+            red_edge_count <= red_edge_count + 1;
     end
 
     initial begin
         dark_edge_count = 0;
         bright_background_count = 0;
+        red_edge_count = 0;
         repeat (4) @(negedge clk);
         reset = 1'b0;
 
@@ -71,6 +77,11 @@ module tb_pixel_filter_pipeline;
         if (dark_edge_count < 4 || bright_background_count < 4) begin
             $fatal(1, "FAIL: expected dark Sobel edges and bright sketch background, edges=%0d background=%0d",
                    dark_edge_count, bright_background_count);
+        end
+
+        if (red_edge_count !== 0) begin
+            $fatal(1, "FAIL: small synthetic edge should not trigger person-candidate red edges, got %0d",
+                   red_edge_count);
         end
 
         $display("PASS: tb_pixel_filter_pipeline, dark edges=%0d bright background=%0d",

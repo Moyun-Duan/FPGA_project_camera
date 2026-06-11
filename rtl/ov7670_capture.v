@@ -4,7 +4,8 @@ module ov7670_capture #(
     parameter WIDTH  = 320,
     parameter HEIGHT = 240,
     parameter FORMAT = 0,
-    parameter YUV_TO_RGB = 0
+    parameter YUV_TO_RGB = 0,
+    parameter LUMA_OUTPUT = 0
 ) (
     input  wire        pclk,
     input  wire        reset,
@@ -34,6 +35,13 @@ module ov7670_capture #(
         input [7:0] y;
         begin
             gray_to_rgb565 = {y[7:3], y[7:2], y[7:3]};
+        end
+    endfunction
+
+    function [15:0] gray_output_word;
+        input [7:0] y;
+        begin
+            gray_output_word = LUMA_OUTPUT ? {y, 8'd0} : gray_to_rgb565(y);
         end
     endfunction
 
@@ -153,7 +161,7 @@ module ov7670_capture #(
                             if ((!yuv_byte_order && ((byte_phase == 2'd0) || (byte_phase == 2'd2))) ||
                                 ( yuv_byte_order && ((byte_phase == 2'd1) || (byte_phase == 2'd3)))) begin
                                 if (pixel_x < WIDTH[8:0] && pixel_y < HEIGHT[7:0]) begin
-                                    rgb565      <= gray_to_rgb565(data);
+                                    rgb565      <= gray_output_word(data);
                                     pixel_valid <= 1'b1;
                                 end
                                 if (pixel_x < (WIDTH - 1))
@@ -190,7 +198,7 @@ module ov7670_capture #(
                             if ((!yuv_byte_order && ((byte_phase == 2'd1) || (byte_phase == 2'd3))) ||
                                 ( yuv_byte_order && ((byte_phase == 2'd0) || (byte_phase == 2'd2)))) begin
                                 if (pixel_x < WIDTH[8:0] && pixel_y < HEIGHT[7:0]) begin
-                                    rgb565      <= gray_to_rgb565(data);
+                                    rgb565      <= gray_output_word(data);
                                     pixel_valid <= 1'b1;
                                 end
                                 if (pixel_x < (WIDTH - 1))

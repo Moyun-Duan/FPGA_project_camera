@@ -58,7 +58,8 @@ module tb_ov7670_capture;
         .WIDTH(4),
         .HEIGHT(1),
         .FORMAT(1),
-        .YUV_TO_RGB(1'b0)
+        .YUV_TO_RGB(1'b0),
+        .LUMA_OUTPUT(1'b1)
     ) dut_yuv_luma (
         .pclk(clk),
         .reset(reset),
@@ -73,10 +74,10 @@ module tb_ov7670_capture;
         .frame_start(yuv_frame_start)
     );
 
-    function [15:0] gray_to_rgb565;
+    function [15:0] luma_word;
         input [7:0] y;
         begin
-            gray_to_rgb565 = {y[7:3], y[7:2], y[7:3]};
+            luma_word = {y, 8'd0};
         end
     endfunction
 
@@ -175,11 +176,11 @@ module tb_ov7670_capture;
             $fatal(1, "FAIL: expected 4 YUV luma valid pixels, got %0d", valid_count_yuv);
         end
 
-        if (yuv_seen0 !== gray_to_rgb565(8'h20) ||
-            yuv_seen1 !== gray_to_rgb565(8'h80) ||
-            yuv_seen2 !== gray_to_rgb565(8'hf0) ||
-            yuv_seen3 !== gray_to_rgb565(8'h40)) begin
-            $fatal(1, "FAIL: YUV luma bytes were not converted to expected grayscale RGB565 values");
+        if (yuv_seen0 !== luma_word(8'h20) ||
+            yuv_seen1 !== luma_word(8'h80) ||
+            yuv_seen2 !== luma_word(8'hf0) ||
+            yuv_seen3 !== luma_word(8'h40)) begin
+            $fatal(1, "FAIL: YUV luma bytes were not captured in direct 8-bit luma output words");
         end
 
         $display("PASS: tb_ov7670_capture");

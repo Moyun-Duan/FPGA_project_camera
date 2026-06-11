@@ -3,8 +3,13 @@
 module pixel_filter_pipeline #(
     parameter WIDTH  = 320,
     parameter HEIGHT = 240,
+    parameter INPUT_LUMA = 0,
     parameter SOBEL_LOW_THRESHOLD = 8'd48,
-    parameter SOBEL_THRESHOLD = 8'd128
+    parameter SOBEL_THRESHOLD = 8'd128,
+    parameter PERSON_MIN_EDGES = 16'd300,
+    parameter PERSON_MIN_WIDTH = 9'd20,
+    parameter PERSON_MIN_HEIGHT = 8'd70,
+    parameter PERSON_MAX_WIDTH = 9'd220
 ) (
     input  wire        clk,
     input  wire        reset,
@@ -17,13 +22,18 @@ module pixel_filter_pipeline #(
     output reg         out_valid,
     output reg [8:0]   out_x,
     output reg [7:0]   out_y,
-    output reg [7:0]   out_pixel
+    output reg [7:0]   out_pixel,
+    output reg         out_red_edge
 );
-    wire [7:0] gray;
+    localparam [8:0] LAST_X = WIDTH - 1;
+    localparam [7:0] LAST_Y = HEIGHT - 1;
+
+    wire [7:0] rgb_gray;
     rgb565_to_gray u_gray (
         .rgb565(rgb565),
-        .gray(gray)
+        .gray(rgb_gray)
     );
+    wire [7:0] gray = INPUT_LUMA ? rgb565[15:8] : rgb_gray;
 
     wire       win_valid;
     wire [8:0] win_x;
@@ -54,7 +64,10 @@ module pixel_filter_pipeline #(
     wire [7:0] sobel_mag;
     wire       sobel_is_edge;
 
-    canny_pipeline u_sobel (
+    canny_pipeline #(
+        .LOW_THRESHOLD(SOBEL_LOW_THRESHOLD),
+        .HIGH_THRESHOLD(SOBEL_THRESHOLD)
+    ) u_sobel (
         .clk(clk),
         .reset(reset),
         .window_valid(win_valid),
@@ -107,24 +120,101 @@ module pixel_filter_pipeline #(
         end
     endfunction
 
-    reg [7:0] gaussian_pixel_d;
+    reg [7:0] gaussian_pixel_d1;
+    reg [7:0] gaussian_pixel_d2;
+    reg [7:0] gaussian_pixel_d3;
+    reg [7:0] gaussian_pixel_d4;
+
     wire      sobel_soft_edge = (sobel_mag >= SOBEL_LOW_THRESHOLD);
     wire [7:0] sketch_edge_pixel =
         sobel_is_edge ? 8'd0 :
         (sobel_soft_edge ? 8'd160 : 8'd255);
     wire [7:0] cartoon_pixel =
         sobel_is_edge ? 8'd0 :
-        (sobel_soft_edge ? (cartoon_tone(gaussian_pixel_d) >> 1) : cartoon_tone(gaussian_pixel_d));
+        (sobel_soft_edge ? (cartoon_tone(gaussian_pixel_d4) >> 1) : cartoon_tone(gaussian_pixel_d4));
+
+    reg        person_active;
+    reg [8:0]  person_x_min;
+    reg [8:0]  person_x_max;
+    reg [7:0]  person_y_min;
+    reg [7:0]  person_y_max;
+
+    reg [15:0] edge_count;
+    reg [8:0]  edge_x_min;
+    reg [8:0]  edge_x_max;
+    reg [7:0]  edge_y_min;
+    reg [7:0]  edge_y_max;
+
+    wire [8:0] edge_width = edge_x_max - edge_x_min + 1'b1;
+    wire [7:0] edge_height = edge_y_max - edge_y_min + 1'b1;
+    wire       edge_bbox_valid =
+        (edge_count >= PERSON_MIN_EDGES) &&
+        (edge_x_max > edge_x_min) &&
+        (edge_y_max > edge_y_min) &&
+        (edge_width >= PERSON_MIN_WIDTH) &&
+        (edge_width <= PERSON_MAX_WIDTH) &&
+        (edge_height >= PERSON_MIN_HEIGHT) &&
+        ({1'b0, edge_height} >= edge_width);
+
+    wire frame_start_sample = pixel_valid && (pixel_x == 9'd0) && (pixel_y == 8'd0);
+    wire track_edge =
+        sobel_valid && sobel_is_edge &&
+        (sobel_x > 9'd2) && (sobel_x < (LAST_X - 9'd2)) &&
+        (sobel_y > 8'd2) && (sobel_y < (LAST_Y - 8'd2));
+    wire person_region_edge =
+        person_active && sobel_is_edge &&
+        (sobel_x >= person_x_min) && (sobel_x <= person_x_max) &&
+        (sobel_y >= person_y_min) && (sobel_y <= person_y_max);
 
     always @(posedge clk) begin
         if (reset) begin
-            out_valid <= 1'b0;
-            out_x     <= 9'd0;
-            out_y     <= 8'd0;
-            out_pixel <= 8'd0;
-            gaussian_pixel_d <= 8'd0;
+            out_valid         <= 1'b0;
+            out_x             <= 9'd0;
+            out_y             <= 8'd0;
+            out_pixel         <= 8'd0;
+            out_red_edge      <= 1'b0;
+            gaussian_pixel_d1 <= 8'd0;
+            gaussian_pixel_d2 <= 8'd0;
+            gaussian_pixel_d3 <= 8'd0;
+            gaussian_pixel_d4 <= 8'd0;
+            person_active     <= 1'b0;
+            person_x_min      <= 9'd0;
+            person_x_max      <= 9'd0;
+            person_y_min      <= 8'd0;
+            person_y_max      <= 8'd0;
+            edge_count        <= 16'd0;
+            edge_x_min        <= LAST_X;
+            edge_x_max        <= 9'd0;
+            edge_y_min        <= LAST_Y;
+            edge_y_max        <= 8'd0;
         end else begin
-            gaussian_pixel_d <= gaussian_pixel;
+            gaussian_pixel_d1 <= gaussian_pixel;
+            gaussian_pixel_d2 <= gaussian_pixel_d1;
+            gaussian_pixel_d3 <= gaussian_pixel_d2;
+            gaussian_pixel_d4 <= gaussian_pixel_d3;
+
+            if (frame_start_sample) begin
+                person_active <= edge_bbox_valid;
+                person_x_min  <= edge_x_min;
+                person_x_max  <= edge_x_max;
+                person_y_min  <= edge_y_min;
+                person_y_max  <= edge_y_max;
+                edge_count    <= 16'd0;
+                edge_x_min    <= LAST_X;
+                edge_x_max    <= 9'd0;
+                edge_y_min    <= LAST_Y;
+                edge_y_max    <= 8'd0;
+            end else if (track_edge) begin
+                edge_count <= edge_count + 1'b1;
+                if (sobel_x < edge_x_min)
+                    edge_x_min <= sobel_x;
+                if (sobel_x > edge_x_max)
+                    edge_x_max <= sobel_x;
+                if (sobel_y < edge_y_min)
+                    edge_y_min <= sobel_y;
+                if (sobel_y > edge_y_max)
+                    edge_y_max <= sobel_y;
+            end
 
             case (mode)
                 2'b00: begin
@@ -132,24 +222,28 @@ module pixel_filter_pipeline #(
                     out_x     <= pixel_x;
                     out_y     <= pixel_y;
                     out_pixel <= gray;
+                    out_red_edge <= 1'b0;
                 end
                 2'b01: begin
                     out_valid <= win_valid;
                     out_x     <= win_x;
                     out_y     <= win_y;
                     out_pixel <= enhance_enable ? sharpen_pixel : gaussian_pixel;
+                    out_red_edge <= 1'b0;
                 end
                 2'b10: begin
                     out_valid <= sobel_valid;
                     out_x     <= sobel_x;
                     out_y     <= sobel_y;
                     out_pixel <= sketch_edge_pixel;
+                    out_red_edge <= person_region_edge;
                 end
                 default: begin
                     out_valid <= sobel_valid;
                     out_x     <= sobel_x;
                     out_y     <= sobel_y;
                     out_pixel <= cartoon_pixel;
+                    out_red_edge <= 1'b0;
                 end
             endcase
         end

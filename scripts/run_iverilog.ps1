@@ -16,11 +16,22 @@ iverilog -g2005-sv -Wall -o (Join-Path $Build "tb_pixel_filter_pipeline.vvp") `
   (Join-Path $Root "tb/tb_pixel_filter_pipeline.v") `
   (Join-Path $Root "rtl/rgb565_to_gray.v") `
   (Join-Path $Root "rtl/image_window_3x3.v") `
-  (Join-Path $Root "rtl/sobel_pipeline.v") `
+  (Join-Path $Root "rtl/canny_pipeline.v") `
   (Join-Path $Root "rtl/pixel_filter_pipeline.v")
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 vvp (Join-Path $Build "tb_pixel_filter_pipeline.vvp")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+iverilog -g2005-sv -Wall -o (Join-Path $Build "tb_person_edge_highlight.vvp") `
+  (Join-Path $Root "tb/tb_person_edge_highlight.v") `
+  (Join-Path $Root "rtl/rgb565_to_gray.v") `
+  (Join-Path $Root "rtl/image_window_3x3.v") `
+  (Join-Path $Root "rtl/canny_pipeline.v") `
+  (Join-Path $Root "rtl/pixel_filter_pipeline.v")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+vvp (Join-Path $Build "tb_person_edge_highlight.vvp")
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $RtlFiles = Get-ChildItem (Join-Path $Root "rtl") -Filter "*.v" | ForEach-Object { $_.FullName }
